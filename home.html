@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - CUBE TOUCH</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <div class="content">
+        <!-- Welcome Card -->
+        <div class="card">
+            <div class="card-header" style="background-color: #3498db;">
+                <h2>🏠 CUBE TOUCH SYSTEM DASHBOARD</h2>
+            </div>
+        </div>
+
+        <!-- ESP Data Display -->
+        <div class="card">
+            <div class="card-header" style="background-color: #e74c3c;">
+                <h2>📡 ESP32 DATA (Port 1509)</h2>
+            </div>
+            <div class="card-content">
+                <div class="data-display">
+                    <div class="data-item">
+                        <label>📊 Raw Data:</label>
+                        <div id="raw-data" class="data-value">Waiting for data...</div>
+                    </div>
+                    <div class="data-item">
+                        <label>⏰ Last Update:</label>
+                        <div id="timestamp" class="data-value">-</div>
+                    </div>
+                    <div class="data-item">
+                        <label>📈 Packet Count:</label>
+                        <div id="packet-count" class="data-value">0</div>
+                    </div>
+                    <div class="status-indicator">
+                        <span id="status-dot" class="status-dot offline"></span>
+                        <span id="status-text">Waiting for connection...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ESP Devices Status Card -->
+        <div class="card">
+            <div class="card-header" style="background-color: #27ae60;">
+                <h2 id="esp-count">📡 ESP32 DEVICES STATUS (0 Online / 0 Total)</h2>
+            </div>
+            <div class="card-content">
+                <div id="esp-devices-list">
+                    <p class="empty-state">⏳ Waiting for ESP32 devices...<br>Devices will appear here when they send heartbeat signals.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="navbar.js"></script>
+    <script>
+        // Fetch ESP data from server API
+        function updateESPData() {
+            fetch('/api/esp-data')
+                .then(response => response.json())
+                .then(data => {
+                    // Update raw data
+                    document.getElementById('raw-data').textContent = data.raw_data;
+                    document.getElementById('timestamp').textContent = data.timestamp || '-';
+                    document.getElementById('packet-count').textContent = data.count;
+                    
+                    // Update status
+                    const statusDot = document.getElementById('status-dot');
+                    const statusText = document.getElementById('status-text');
+                    
+                    if (data.count > 0 && data.timestamp) {
+                        statusDot.className = 'status-dot online';
+                        statusText.textContent = 'Connected - Receiving data';
+                    } else {
+                        statusDot.className = 'status-dot offline';
+                        statusText.textContent = 'Waiting for connection...';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching ESP data:', error);
+                });
+        }
+        
+        // Fetch ESP devices status
+        function updateESPDevices() {
+            fetch('/api/esp-devices')
+                .then(response => response.json())
+                .then(devices => {
+                    const listContainer = document.getElementById('esp-devices-list');
+                    const countHeader = document.getElementById('esp-count');
+                    
+                    if (devices.length === 0) {
+                        listContainer.innerHTML = '<p class="empty-state">⏳ Waiting for ESP32 devices...<br>Devices will appear here when they send heartbeat signals.</p>';
+                        countHeader.textContent = '📡 ESP32 DEVICES STATUS (0 Online / 0 Total)';
+                        return;
+                    }
+                    
+                    // Count online devices
+                    const onlineCount = devices.filter(d => d.is_online).length;
+                    countHeader.textContent = `📡 ESP32 DEVICES STATUS (${onlineCount} Online / ${devices.length} Total)`;
+                    
+                    // Build devices HTML
+                    let html = '';
+                    devices.forEach(device => {
+                        const bgColor = device.is_online ? '#e8f5e8' : '#ffe6e6';
+                        const statusColor = device.is_online ? '#27ae60' : '#e74c3c';
+                        const statusIcon = device.is_online ? '🟢' : '🔴';
+                        
+                        // Ping display
+                        let pingDisplay = '';
+                        if (device.ping_ms > 0) {
+                            pingDisplay = `<div style="color: ${device.ping_color};">${device.ping_icon} Ping: ${device.ping_ms}ms (${device.ping_status})</div>`;
+                        } else {
+                            pingDisplay = `<div style="color: ${device.ping_color};">${device.ping_icon} Ping: ${device.ping_status}</div>`;
+                        }
+                        
+                        // Calculate port from IP
+                        const ipParts = device.ip.split('.');
+                        const lastOctet = ipParts[3];
+                        const port = lastOctet + '00';
+                        
+                        // Access button
+                        const accessButton = device.is_online 
+                            ? `<button class="btn-access" onclick="accessDevice('${device.ip}', ${port})">🔗 Access</button>`
+                            : '';
+                        
+                        html += `
+                            <div class="device-card" style="background-color: ${bgColor};">
+                                <div class="device-status" style="background-color: ${statusColor};">
+                                    <span class="status-icon">${statusIcon}</span>
+                                    <span class="status-text">${device.status}</span>
+                                </div>
+                                <div class="device-info">
+                                    <div class="device-name">📱 ${device.name}</div>
+                                    <div class="device-ip">🌐 ${device.ip} : ${port}</div>
+                                    <div class="device-stats">
+                                        <div>⏰ Last: ${device.last_heartbeat}</div>
+                                        <div>📊 Count: ${device.heartbeat_count}</div>
+                                        <div>🕐 Uptime: ${device.uptime}</div>
+                                        ${pingDisplay}
+                                    </div>
+                                    ${accessButton}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    listContainer.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error fetching ESP devices:', error);
+                });
+        }
+        
+        // Access device function
+        window.accessDevice = function(ip, port) {
+            if (confirm(`Kết nối với ${ip}:${port}?\n\nESP32 sẽ nhận lệnh điều khiển trên port này.`)) {
+                // Calculate device_key (name from IP)
+                const lastOctet = ip.split('.').pop();
+                const deviceKey = `Cube ${lastOctet}_${ip}`;
+                
+                // Store selected device in localStorage
+                localStorage.setItem('selected_esp_ip', ip);
+                localStorage.setItem('selected_esp_port', port);
+                localStorage.setItem('selected_device_key', deviceKey);
+                
+                // Send to server
+                fetch('/api/select-device', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        device_key: deviceKey
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Device selected on server:', data);
+                    alert(`✓ Đã kết nối với ${ip}:${port}\n\nBạn có thể điều khiển thiết bị này từ tab Config và Monitor.`);
+                })
+                .catch(error => {
+                    console.error('Error selecting device:', error);
+                    alert(`✓ Đã lưu local: ${ip}:${port}\n\nBạn có thể điều khiển thiết bị này từ tab Config và Monitor.`);
+                });
+            }
+        }
+        
+        // Update every 500ms
+        setInterval(updateESPData, 500);
+        setInterval(updateESPDevices, 1000);
+        
+        // Initial update
+        updateESPData();
+        updateESPDevices();
+    </script>
+</body>
+</html>

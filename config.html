@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config - CUBE TOUCH</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <div class="content">
+        <!-- Device Info -->
+        <div class="device-info-banner">
+            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+        </div>
+
+        <div class="grid-4">
+            <!-- LED Control Card -->
+            <div class="card">
+                <div class="card-header" style="background-color: #2c3e50;">
+                    <h3>🎯 LED CONFIG</h3>
+                </div>
+                <div class="card-content">
+                    <button class="btn btn-success" id="led-toggle" onclick="toggleLED(this)">🟢 LED: Bật</button>
+                    <button class="btn btn-primary" id="config-toggle" onclick="toggleConfigMode(this)">🔵 Config: Tắt</button>
+                    <p class="status-text" id="config-status">🔵 Config Mode: Tắt</p>
+                    <button class="btn btn-purple" onclick="chooseColor()">🎨 Chọn màu</button>
+                    <div class="color-preview" id="color-preview"></div>
+                    <label>💡 Độ sáng: <span id="brightness-value">128</span></label>
+                    <input type="range" min="1" max="255" value="128" class="slider" id="brightness-slider" oninput="setBrightness(this.value)">
+                    <p class="info-text" id="rgb-info">Chưa có màu được chọn</p>
+                </div>
+            </div>
+
+            <!-- LED Effects Card -->
+            <div class="card">
+                <div class="card-header" style="background-color: #9b59b6;">
+                    <h3>✨ LED EFFECTS</h3>
+                </div>
+                <div class="card-content">
+                    <div class="section">
+                        <h4>✨ Hiệu ứng</h4>
+                        <button class="btn btn-pink" onclick="sendRainbow()">🌈 Rainbow</button>
+                        <button class="btn btn-warning" onclick="testLED()">💡 Test LED</button>
+                    </div>
+                    <div class="section">
+                        <h4>🔄 Chiều di chuyển</h4>
+                        <div class="button-group">
+                            <button class="btn btn-success" onclick="setDirection(1)">⬆️ Up</button>
+                            <button class="btn btn-danger" onclick="setDirection(0)">⬇️ Down</button>
+                        </div>
+                        <p class="status-text" id="direction-status">Chưa chọn chiều</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Xilanh Control Card -->
+            <div class="card">
+                <div class="card-header" style="background-color: #8e44ad;">
+                    <h3>🔌 XILANH CONTROL</h3>
+                </div>
+                <div class="card-content">
+                    <p class="status-text" id="xilanh-status">🔴 XI LANH: STOPPED</p>
+                    <button class="btn btn-success" onclick="xilanhUp()">⬆️ UP</button>
+                    <button class="btn btn-primary" onclick="xilanhDown()">⬇️ DOWN</button>
+                    <button class="btn btn-danger" onclick="xilanhStop()">⏹️ STOP</button>
+                </div>
+            </div>
+
+            <!-- IR Control Card -->
+            <div class="card">
+                <div class="card-header" style="background-color: #ff6b6b;">
+                    <h3>📡 IR CONTROL</h3>
+                </div>
+                <div class="card-content">
+                    <div class="section">
+                        <h4>📤 LED Phát (Transmit)</h4>
+                        <p class="value-text" id="ir-transmit-value">0.0 V</p>
+                        <input type="range" min="0" max="3.3" step="0.1" value="0" class="slider" id="ir-transmit-slider">
+                    </div>
+                    <div class="section">
+                        <h4>📥 LED Thu (Receive)</h4>
+                        <p class="value-text" id="ir-receive-value">0.0 V</p>
+                        <input type="range" min="0" max="3.3" step="0.1" value="0" class="slider" id="ir-receive-slider">
+                    </div>
+                    <button class="btn btn-secondary" onclick="resetIR()">🔄 RESET</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Section -->
+        <div class="card">
+            <div class="card-header" style="background-color: #34495e;">
+                <h3>⚡ SYSTEM STATUS</h3>
+            </div>
+            <div class="card-content">
+                <p>🌐 OSC Server: Active on port 1509</p>
+                <p>System Ready</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="navbar.js"></script>
+    <script src="control.js"></script>
+    <script>
+        function resetIR() {
+            document.getElementById('ir-transmit-slider').value = 0;
+            document.getElementById('ir-receive-slider').value = 0;
+            document.getElementById('ir-transmit-value').textContent = '0.0 V';
+            document.getElementById('ir-receive-value').textContent = '0.0 V';
+        }
+    </script>
+</body>
+</html>

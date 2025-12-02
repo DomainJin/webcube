@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor - CUBE TOUCH</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <div class="content">
+        <!-- Device Info -->
+        <div class="device-info-banner">
+            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+        </div>
+
+        <!-- Metric Cards Row -->
+        <div class="grid-4">
+            <div class="metric-card" style="--card-color: #3498db;">
+                <div class="metric-header">📱 RAW TOUCH</div>
+                <div class="metric-value" id="raw-touch-value">N/A</div>
+            </div>
+            <div class="metric-card" style="--card-color: #e74c3c;">
+                <div class="metric-header">📈 VALUE</div>
+                <div class="metric-value" id="value-value">N/A</div>
+            </div>
+            <div class="metric-card" style="--card-color: #f39c12;">
+                <div class="metric-header">🎯 THRESHOLD</div>
+                <div class="metric-value" id="threshold-value">N/A</div>
+            </div>
+            <div class="metric-card" style="--card-color: #9b59b6;">
+                <div class="metric-header">⚙️ CONTROL</div>
+                <div class="metric-control">
+                    <label>Ngưỡng:</label>
+                    <div class="input-group">
+                        <input type="text" value="43202" placeholder="Nhập ngưỡng" id="threshold-input">
+                        <button class="btn btn-purple" onclick="sendThreshold()">Gửi</button>
+                    </div>
+                    <p class="status-text" id="threshold-status">Chưa gửi ngưỡng</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- IR Sensor Monitoring -->
+        <div class="card">
+            <div class="card-header" style="background-color: #27ae60;">
+                <h2>📡 IR SENSOR MONITORING</h2>
+            </div>
+            <div class="card-content">
+                <div class="grid-2">
+                    <div>
+                        <div class="status-panel">
+                            <h3>📥 IR Receiver</h3>
+                            <p class="status-text" id="ir-status">🔴 Receiver: Waiting...</p>
+                            <p id="ir-signal">Signal: 0.0V</p>
+                            <p><strong id="ir-adc-display">IR_ADC: 0</strong></p>
+                        </div>
+                    </div>
+                    <div class="graph-panel">
+                        <h3>📊 IR ADC Graph (0-4095)</h3>
+                        <canvas id="adc-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Command -->
+        <div class="card">
+            <div class="card-header" style="background-color: #e74c3c;">
+                <h2>💻 CUSTOM COMMAND</h2>
+            </div>
+            <div class="card-content">
+                <div class="command-input">
+                    <label>Command:</label>
+                    <input type="text" placeholder="What do u want?" id="custom-command">
+                    <button class="btn btn-danger" onclick="sendCustomCommand()">📤 Send</button>
+                </div>
+                <p class="status-text" id="command-status">Chưa gửi command</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="navbar.js"></script>
+    <script src="control.js"></script>
+    <script>
+        // Chart setup
+        const ctx = document.getElementById('adc-chart').getContext('2d');
+        const adcChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'IR ADC Value',
+                    data: [],
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 4095
+                    },
+                    x: {
+                        display: false
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Update touch data
+        function updateTouchData() {
+            const deviceKey = localStorage.getItem('selected_device_key');
+            const url = deviceKey ? `/api/touch-data?device=${encodeURIComponent(deviceKey)}` : '/api/touch-data';
+            
+            console.log('[Touch] Requesting:', url, 'Device:', deviceKey);
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('[Touch] Received:', data);
+                    document.getElementById('raw-touch-value').textContent = data.raw_touch;
+                    document.getElementById('value-value').textContent = data.value;
+                    document.getElementById('threshold-value').textContent = data.threshold;
+                })
+                .catch(error => console.error('Error fetching touch data:', error));
+        }
+
+        // Update IR ADC data
+        function updateIRADC() {
+            const deviceKey = localStorage.getItem('selected_device_key');
+            const url = deviceKey ? `/api/ir-adc?device=${encodeURIComponent(deviceKey)}` : '/api/ir-adc';
+            
+            console.log('[IR_ADC] Requesting:', url, 'Device:', deviceKey);
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('[IR_ADC] Received:', data);
+                    document.getElementById('ir-adc-display').textContent = `IR_ADC: ${data.value}`;
+                    
+                    if (data.value > 0) {
+                        document.getElementById('ir-status').textContent = '🟢 Receiver: ACTIVE';
+                        document.getElementById('ir-status').style.color = '#27ae60';
+                    } else {
+                        document.getElementById('ir-status').textContent = '🔴 Receiver: Waiting...';
+                        document.getElementById('ir-status').style.color = '#e74c3c';
+                    }
+                    
+                    // Update chart with history
+                    if (data.history && data.history.length > 0) {
+                        console.log('[IR_ADC] Updating chart with', data.history.length, 'points');
+                        adcChart.data.labels = data.history.map((_, i) => i);
+                        adcChart.data.datasets[0].data = data.history;
+                        adcChart.update('none'); // Update without animation for performance
+                    } else {
+                        console.warn('[IR_ADC] No history data available');
+                    }
+                })
+                .catch(error => console.error('Error fetching IR ADC:', error));
+        }
+
+        // Update device info banner
+        function updateDeviceInfo() {
+            const deviceIp = localStorage.getItem('selected_esp_ip');
+            const devicePort = localStorage.getItem('selected_esp_port');
+            const deviceKey = localStorage.getItem('selected_device_key');
+            
+            const banner = document.querySelector('.device-info-display');
+            if (deviceIp && devicePort) {
+                banner.textContent = `📡 Monitoring: ${deviceIp}:${devicePort} (${deviceKey || 'Unknown'})`;
+                banner.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            } else {
+                banner.textContent = '⚠️ Chưa chọn thiết bị - Vui lòng vào Home và click Access';
+                banner.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            }
+        }
+
+        // Update every 500ms
+        setInterval(updateTouchData, 500);
+        setInterval(updateIRADC, 500);
+
+        // Initial update
+        updateDeviceInfo();
+        updateTouchData();
+        updateIRADC();
+    </script>
+</body>
+</html>
