@@ -49,13 +49,29 @@
                 <h2>📡 IR SENSOR MONITORING</h2>
             </div>
             <div class="card-content">
-                <div class="grid-2">
+                <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px;">
                     <div>
                         <div class="status-panel">
                             <h3>📥 IR Receiver</h3>
                             <p class="status-text" id="ir-status">🔴 Receiver: Waiting...</p>
                             <p id="ir-signal">Signal: 0.0V</p>
-                            <p><strong id="ir-adc-display">IR_ADC: 0</strong></p>
+                            <div style="margin-top: 15px; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
+                                <p style="color: #3498db; font-weight: bold; margin-bottom: 8px;">📊 IR_ADC_1:</p>
+                                <p style="font-size: 24px; font-weight: bold; color: #3498db;" id="ir-adc-1-display">0</p>
+                            </div>
+                            <div style="margin-top: 10px; padding: 10px; background: rgba(231, 76, 60, 0.1); border-radius: 8px;">
+                                <p style="color: #e74c3c; font-weight: bold; margin-bottom: 8px;">📊 IR_ADC_2:</p>
+                                <p style="font-size: 24px; font-weight: bold; color: #e74c3c;" id="ir-adc-2-display">0</p>
+                            </div>
+                            
+                            <!-- Face Status -->
+                            <div style="margin-top: 15px; padding: 12px; background: linear-gradient(135deg, rgba(155, 89, 182, 0.15), rgba(142, 68, 173, 0.1)); border-radius: 8px; border: 2px solid rgba(155, 89, 182, 0.3);">
+                                <p style="color: #9b59b6; font-weight: bold; margin-bottom: 8px;">🎭 FACE Status:</p>
+                                <div id="face-status-display" style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 20px;">⚪</span>
+                                    <span style="font-size: 18px; font-weight: bold; color: #7f8c8d;">NONE</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="graph-panel">
@@ -91,14 +107,7 @@
             type: 'line',
             data: {
                 labels: [],
-                datasets: [{
-                    label: 'IR ADC Value',
-                    data: [],
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4
-                }]
+                datasets: []
             },
             options: {
                 responsive: true,
@@ -114,9 +123,11 @@
                 },
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'top'
                     }
-                }
+                },
+                animation: false
             }
         });
 
@@ -149,27 +160,97 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('[IR_ADC] Received:', data);
-                    document.getElementById('ir-adc-display').textContent = `IR_ADC: ${data.value}`;
                     
-                    if (data.value > 0) {
+                    // Update both channel displays
+                    const adc1Value = data.ir_adc_1?.value || 0;
+                    const adc2Value = data.ir_adc_2?.value || 0;
+                    
+                    document.getElementById('ir-adc-1-display').textContent = adc1Value;
+                    document.getElementById('ir-adc-2-display').textContent = adc2Value;
+                    
+                    // Update FACE status
+                    updateFaceStatus(data.face_1 || 'NONE');
+                    
+                    // Update status based on either channel being active
+                    if (adc1Value > 0 || adc2Value > 0) {
                         document.getElementById('ir-status').textContent = '🟢 Receiver: ACTIVE';
                         document.getElementById('ir-status').style.color = '#27ae60';
+                        
+                        // Calculate voltage (0-4095 = 0-3.3V)
+                        const voltage = ((adc1Value + adc2Value) / 2 / 4095 * 3.3).toFixed(2);
+                        document.getElementById('ir-signal').textContent = `Signal: ${voltage}V (Avg)`;
                     } else {
                         document.getElementById('ir-status').textContent = '🔴 Receiver: Waiting...';
                         document.getElementById('ir-status').style.color = '#e74c3c';
+                        document.getElementById('ir-signal').textContent = 'Signal: 0.0V';
                     }
                     
-                    // Update chart with history
-                    if (data.history && data.history.length > 0) {
-                        console.log('[IR_ADC] Updating chart with', data.history.length, 'points');
-                        adcChart.data.labels = data.history.map((_, i) => i);
-                        adcChart.data.datasets[0].data = data.history;
-                        adcChart.update('none'); // Update without animation for performance
+                    // Update chart with all channels
+                    const colors = [
+                        {border: '#3498db', bg: 'rgba(52, 152, 219, 0.1)'},
+                        {border: '#e74c3c', bg: 'rgba(231, 76, 60, 0.1)'},
+                        {border: '#2ecc71', bg: 'rgba(46, 204, 113, 0.1)'},
+                        {border: '#f39c12', bg: 'rgba(243, 156, 18, 0.1)'},
+                        {border: '#9b59b6', bg: 'rgba(155, 89, 182, 0.1)'}
+                    ];
+                    
+                    const datasets = [];
+                    let maxLength = 0;
+                    let colorIndex = 0;
+                    
+                    // Build datasets for each IR_ADC channel
+                    for (const key in data) {
+                        if (key.startsWith('ir_adc_') && data[key].history && data[key].history.length > 0) {
+                            const channelNum = key.split('_')[2];
+                            const color = colors[colorIndex % colors.length];
+                            
+                            datasets.push({
+                                label: `IR_ADC_${channelNum}`,
+                                data: data[key].history,
+                                borderColor: color.border,
+                                backgroundColor: color.bg,
+                                borderWidth: 2,
+                                tension: 0.4,
+                                pointRadius: 1
+                            });
+                            
+                            if (data[key].history.length > maxLength) {
+                                maxLength = data[key].history.length;
+                            }
+                            
+                            colorIndex++;
+                        }
+                    }
+                    
+                    if (datasets.length > 0) {
+                        console.log('[IR_ADC] Updating chart with', datasets.length, 'channels,', maxLength, 'points');
+                        adcChart.data.labels = Array.from({length: maxLength}, (_, i) => i);
+                        adcChart.data.datasets = datasets;
+                        adcChart.update('none');
                     } else {
                         console.warn('[IR_ADC] No history data available');
                     }
                 })
                 .catch(error => console.error('Error fetching IR ADC:', error));
+        }
+
+        // Update FACE status display
+        function updateFaceStatus(status) {
+            const faceDisplay = document.getElementById('face-status-display');
+            
+            const statusConfig = {
+                'TOUCH': { emoji: '👆', color: '#e74c3c', text: 'TOUCH' },
+                'UP': { emoji: '⬆️', color: '#3498db', text: 'UP' },
+                'DOWN': { emoji: '⬇️', color: '#f39c12', text: 'DOWN' },
+                'NONE': { emoji: '⚪', color: '#7f8c8d', text: 'NONE' }
+            };
+            
+            const config = statusConfig[status] || statusConfig['NONE'];
+            
+            faceDisplay.innerHTML = `
+                <span style="font-size: 20px;">${config.emoji}</span>
+                <span style="font-size: 18px; font-weight: bold; color: ${config.color};">${config.text}</span>
+            `;
         }
 
         // Update device info banner

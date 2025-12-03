@@ -10,16 +10,127 @@
     <div id="navbar-container"></div>
 
     <div class="content">
+        <!-- Device Info Banner -->
+        <div class="device-info-banner">
+            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+        </div>
+
+        <!-- Mode Selection Card -->
         <div class="card">
             <div class="card-header" style="background-color: #9b59b6;">
-                <h2>🎬 RESOLUME CONTROL</h2>
+                <h2>🎬 MODE SELECTION</h2>
             </div>
             <div class="card-content">
-                <p class="placeholder-text">Resolume control features sẽ được phát triển tại đây</p>
+                <div class="mode-selection">
+                    <div class="mode-button-group">
+                        <button class="btn btn-primary mode-btn" onclick="setMode('HDMI')" id="btn-hdmi">
+                            📺 HDMI MODE
+                        </button>
+                        <button class="btn btn-warning mode-btn" onclick="setMode('ROM')" id="btn-rom">
+                            💾 ROM MODE
+                        </button>
+                        <button class="btn btn-success mode-btn" onclick="setMode('NEXT')" id="btn-next">
+                            ⏭️ NEXT
+                        </button>
+                    </div>
+                    <div class="mode-status">
+                        <p id="mode-status-text">🔵 Current Mode: <strong id="current-mode">Unknown</strong></p>
+                        <p id="mode-status-message" class="status-text">Chưa set mode</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Controls Placeholder -->
+        <div class="card">
+            <div class="card-header" style="background-color: #3498db;">
+                <h2>⚙️ RESOLUME CONTROL</h2>
+            </div>
+            <div class="card-content">
+                <p class="placeholder-text">Additional Resolume control features sẽ được phát triển tại đây</p>
             </div>
         </div>
     </div>
 
     <script src="navbar.js"></script>
+    <script src="control.js"></script>
+    <script>
+        // Update device info banner
+        function updateDeviceInfo() {
+            const deviceIp = localStorage.getItem('selected_esp_ip');
+            const devicePort = localStorage.getItem('selected_esp_port');
+            const deviceKey = localStorage.getItem('selected_device_key');
+            
+            const banner = document.querySelector('.device-info-display');
+            if (deviceIp && devicePort) {
+                banner.textContent = `📡 Connected: ${deviceIp}:${devicePort} (${deviceKey || 'Unknown'})`;
+                banner.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            } else {
+                banner.textContent = '⚠️ Chưa chọn thiết bị - Vui lòng vào Home và click Access';
+                banner.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            }
+        }
+
+        // Set mode function
+        function setMode(mode) {
+            const device = getSelectedDevice();
+            if (!device) {
+                alert('⚠️ Vui lòng chọn thiết bị trước!\n\nVào tab Home và click Access button.');
+                return;
+            }
+
+            // Map mode to command
+            let command;
+            let displayMode;
+            
+            if (mode === 'HDMI') {
+                command = 'A4L:0';
+                displayMode = 'HDMI';
+            } else if (mode === 'ROM') {
+                command = 'A4L:1';
+                displayMode = 'ROM';
+            } else if (mode === 'NEXT') {
+                command = 'A4L:2';
+                displayMode = 'NEXT';
+            }
+            
+            console.log(`Setting mode to ${displayMode}:`, command);
+            
+            sendCommand(command)
+                .then(() => {
+                    // Update UI
+                    document.getElementById('current-mode').textContent = displayMode;
+                    document.getElementById('mode-status-message').textContent = `✓ Đã gửi: ${command}`;
+                    document.getElementById('mode-status-message').style.color = '#27ae60';
+                    
+                    // Update button states (only for HDMI/ROM, not NEXT)
+                    document.getElementById('btn-hdmi').classList.remove('active');
+                    document.getElementById('btn-rom').classList.remove('active');
+                    document.getElementById('btn-next').classList.remove('active');
+                    
+                    if (mode === 'HDMI') {
+                        document.getElementById('btn-hdmi').classList.add('active');
+                    } else if (mode === 'ROM') {
+                        document.getElementById('btn-rom').classList.add('active');
+                    } else if (mode === 'NEXT') {
+                        document.getElementById('btn-next').classList.add('active');
+                        // Remove active state after 500ms for NEXT button
+                        setTimeout(() => {
+                            document.getElementById('btn-next').classList.remove('active');
+                        }, 500);
+                    }
+                    
+                    console.log(`Command ${command} sent successfully`);
+                })
+                .catch((error) => {
+                    console.error('Error setting mode:', error);
+                    document.getElementById('mode-status-message').textContent = `✗ Lỗi: ${error.message}`;
+                    document.getElementById('mode-status-message').style.color = '#e74c3c';
+                });
+        }
+
+        // Initialize on page load
+        updateDeviceInfo();
+    </script>
 </body>
 </html>

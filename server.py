@@ -40,7 +40,7 @@ led_state = {
 }
 
 # Global variable to store IR ADC data per device
-device_ir_adc = {}  # {device_key: {'value': 0, 'timestamp': '', 'history': []}}
+device_ir_adc = {}  # {device_key: {'ir_adc_1': {'value': 0, 'history': []}, 'ir_adc_2': {'value': 0, 'history': []}, ...}}
 
 # Global variable to store touch data per device
 device_touch_data = {}  # {device_key: {'raw_touch': 'N/A', 'value': 'N/A', 'threshold': '43202'}}
@@ -271,9 +271,10 @@ def start_device_listener(device_key, port):
     # Initialize data structures for this device
     if device_key not in device_ir_adc:
         device_ir_adc[device_key] = {
-            'value': 0,
-            'timestamp': '',
-            'history': []
+            'ir_adc_1': {'value': 0, 'timestamp': '', 'history': []},
+            'ir_adc_2': {'value': 0, 'timestamp': '', 'history': []},
+            'face_1': 'NONE',
+            'timestamp': ''
         }
     
     if device_key not in device_touch_data:
@@ -299,22 +300,70 @@ def start_device_listener(device_key, port):
                     data, addr = sock.recvfrom(1024)
                     message = data.decode('utf-8').strip()
                     
-                    # Parse IR_ADC frame
-                    if message.startswith('IR_ADC:'):
+                    # Debug: Print raw message if contains IR_ADC
+                    if 'IR_ADC' in message:
+                        print(f"[DEBUG] Raw message: '{message}'")
+                    
+                    # Parse IR_ADC frames (support multiple channels)
+                    if 'IR_ADC' in message:
                         try:
-                            adc_value_str = message.split('IR_ADC:')[1].strip()
-                            adc_value = int(adc_value_str)
-                            
-                            # Store per-device data
-                            device_ir_adc[device_key]['value'] = adc_value
+                            # Support formats: IR_ADC:4095, IR_ADC_1:4095, IR_ADC_2:4032, IR_ADC_1:,4095 (with comma)
+                            if message.startswith('IR_ADC_'):
+                                # Extract channel number and value
+                                parts = message.split(':')
+                                if len(parts) == 2:
+                                    channel_part = parts[0]  # IR_ADC_1, IR_ADC_2, etc.
+                                    channel_num = channel_part.split('_')[2]  # Get the number
+                                    value_str = parts[1].strip()
+                                    
+                                    # Remove leading comma if exists
+                                    if value_str.startswith(','):
+                                        value_str = value_str[1:]
+                                    
+                                    adc_value = int(value_str)
+                                    
+                                    channel_key = f'ir_adc_{channel_num}'
+                                    
+                                    # Initialize channel if not exists
+                                    if channel_key not in device_ir_adc[device_key]:
+                                        device_ir_adc[device_key][channel_key] = {'value': 0, 'timestamp': '', 'history': []}
+                                    
+                                    # Store per-channel data
+                                    device_ir_adc[device_key][channel_key]['value'] = adc_value
+                                    device_ir_adc[device_key][channel_key]['timestamp'] = datetime.now().strftime('%H:%M:%S')
+                                    
+                                    # Keep last 100 values per channel
+                                    device_ir_adc[device_key][channel_key]['history'].append(adc_value)
+                                    if len(device_ir_adc[device_key][channel_key]['history']) > 100:
+                                        device_ir_adc[device_key][channel_key]['history'].pop(0)
+                                    
+                                    print(f"✓ {device_key} {channel_key.upper()}: {adc_value}")
+                            elif message.startswith('IR_ADC:'):
+                                # Legacy format: IR_ADC:4095 or IR_ADC:,4095
+                                value_str = message.split('IR_ADC:')[1].strip()
+                                
+                                # Remove leading comma if exists
+                                if value_str.startswith(','):
+                                    value_str = value_str[1:]
+                                
+                                adc_value = int(value_str)
+                                
+                                # Store in ir_adc_1 by default
+                                if 'ir_adc_1' not in device_ir_adc[device_key]:
+                                    device_ir_adc[device_key]['ir_adc_1'] = {'value': 0, 'timestamp': '', 'history': []}
+                                
+                                device_ir_adc[device_key]['ir_adc_1']['value'] = adc_value
+                                device_ir_adc[device_key]['ir_adc_1']['timestamp'] = datetime.now().strftime('%H:%M:%S')
+                                
+                                # Keep last 100 values
+                                device_ir_adc[device_key]['ir_adc_1']['history'].append(adc_value)
+                                if len(device_ir_adc[device_key]['ir_adc_1']['history']) > 100:
+                                    device_ir_adc[device_key]['ir_adc_1']['history'].pop(0)
+                                
+                                print(f"✓ {device_key} IR_ADC_1: {adc_value}")
+                                
+                            # Update global timestamp
                             device_ir_adc[device_key]['timestamp'] = datetime.now().strftime('%H:%M:%S')
-                            
-                            # Keep last 100 values
-                            device_ir_adc[device_key]['history'].append(adc_value)
-                            if len(device_ir_adc[device_key]['history']) > 100:
-                                device_ir_adc[device_key]['history'].pop(0)
-                            
-                            print(f"✓ {device_key} IR_ADC: {adc_value}")
                         except Exception as e:
                             print(f"Error parsing IR_ADC: {e}")
                     
@@ -336,6 +385,16 @@ def start_device_listener(device_key, port):
                             print(f"✓ {device_key} Touch: {device_touch_data[device_key]}")
                         except Exception as e:
                             print(f"Error parsing touch data: {e}")
+                    
+                    # Parse FACE status (FACE_1:TOUCH, FACE_1:UP, FACE_1:DOWN, FACE_1:NONE)
+                    elif message.startswith('FACE_1:'):
+                        try:
+                            face_status = message.split('FACE_1:')[1].strip().upper()
+                            if face_status in ['TOUCH', 'UP', 'DOWN', 'NONE']:
+                                device_ir_adc[device_key]['face_1'] = face_status
+                                print(f"✓ {device_key} FACE_1: {face_status}")
+                        except Exception as e:
+                            print(f"Error parsing FACE data: {e}")
                             
                 except socket.timeout:
                     continue  # Normal timeout, continue listening
