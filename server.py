@@ -7,6 +7,7 @@ import time
 import re
 import subprocess
 import platform
+from touch_handler import touch_handler
 
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -26,7 +27,7 @@ esp_data = {
 
 # Global variable to store ESP devices
 esp_devices = {}
-HEARTBEAT_TIMEOUT = 3  # seconds - nếu không nhận heartbeat sau 3s thì offline
+HEARTBEAT_TIMEOUT = 5  # seconds - nếu không nhận heartbeat sau 3s thì offline
 
 # Global variable to store LED state
 led_state = {
@@ -45,21 +46,43 @@ device_ir_adc = {}  # {device_key: {'ir_adc_1': {'value': 0, 'history': []}, 'ir
 # Global variable to store touch data per device
 device_touch_data = {}  # {device_key: {'raw_touch': 'N/A', 'value': 'N/A', 'threshold': '43202'}}
 
+# Global variable to store touch flag per device (activated when FACE = TOUCH)
+device_touch_flag = {}  # {device_key: True/False}
+
 # Global variable for selected device (from frontend)
 selected_device = None
 
 # Global variable to store active device listeners
 device_listeners = {}  # {device_key: {'port': 300, 'thread': thread_obj, 'sock': socket_obj}}
 
+# Global variable to store layer index for each device (for Resolume)
+device_layer_index = {}  # {device_key: layer_number}
+next_layer_index = 1  # Counter for assigning layers
+
 def ping_device(ip):
     """Ping device và trả về latency (ms)"""
     try:
         # Xác định command dựa trên OS
-        param = '-n' if platform.system().lower() == 'windows' else '-c'
-        command = ['ping', param, '1', '-w', '1000', ip]
+        if platform.system().lower() == 'windows':
+            # Windows: -n 1 (1 packet), -w 500 (timeout 500ms), -l 32 (32 bytes), -4 (IPv4)
+            command = ['ping', '-n', '1', '-w', '500', '-l', '32', '-4', ip]
+        else:
+            # Linux/Mac
+            command = ['ping', '-c', '1', '-W', '1', '-s', '32', ip]
         
-        # Chạy ping
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True, timeout=2)
+        # Chạy ping với priority cao
+        startupinfo = None
+        if platform.system().lower() == 'windows':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        
+        output = subprocess.check_output(
+            command, 
+            stderr=subprocess.STDOUT, 
+            universal_newlines=True, 
+            timeout=1.5,  # ✅ Giảm từ 2s xuống 1.5s
+            startupinfo=startupinfo
+        )
         
         # Parse ping time từ output
         if platform.system().lower() == 'windows':
@@ -81,49 +104,94 @@ def ping_device(ip):
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
         return 0  # Ping failed
     except Exception as e:
-        print(f"Ping error for {ip}: {e}")
+        # print(f"Ping error for {ip}: {e}")  # Tắt log để giảm overhead
         return 0
 
 def ping_checker():
-    """Background thread để ping các devices"""
-    while True:
+    """Background thread để ping các devices - Optimized version"""
+    ping_history = {}  # {device_key: [recent_pings]} - Smoothing ping values
+    
+    def ping_single_device(device_key, device):
+        """Ping 1 device trong thread riêng"""
         try:
-            for device_key in list(esp_devices.keys()):
-                device = esp_devices[device_key]
+            if device['is_online']:
+                ip = device['ip']
+                ping_ms = ping_device(ip)
                 
-                # Chỉ ping devices đang online
-                if device['is_online']:
-                    ip = device['ip']
-                    ping_ms = ping_device(ip)
+                # Smoothing: Lưu 3 giá trị gần nhất và tính trung bình (giảm từ 5)
+                if device_key not in ping_history:
+                    ping_history[device_key] = []
+                
+                if ping_ms > 0:
+                    # Reset fail counter khi ping thành công
+                    device['ping_fail_count'] = 0
                     
-                    device['ping_ms'] = ping_ms
+                    ping_history[device_key].append(ping_ms)
+                    # Giữ 3 giá trị gần nhất (giảm từ 5 để responsive hơn)
+                    if len(ping_history[device_key]) > 3:
+                        ping_history[device_key].pop(0)
                     
-                    if ping_ms > 0:
-                        if ping_ms < 50:
-                            device['ping_status'] = 'Excellent'
-                            device['ping_icon'] = '🟢'
-                            device['ping_color'] = '#27ae60'
-                        elif ping_ms < 100:
-                            device['ping_status'] = 'Good'
-                            device['ping_icon'] = '🟡'
-                            device['ping_color'] = '#f39c12'
-                        else:
-                            device['ping_status'] = 'Fair'
-                            device['ping_icon'] = '🟠'
-                            device['ping_color'] = '#e67e22'
+                    # Tính trung bình để làm mượt
+                    avg_ping = sum(ping_history[device_key]) // len(ping_history[device_key])
+                    device['ping_ms'] = avg_ping
+                    
+                    # ✅ Cải thiện threshold để phản ánh đúng hơn
+                    if avg_ping < 30:
+                        device['ping_status'] = 'Excellent'
+                        device['ping_icon'] = '🟢'
+                        device['ping_color'] = '#27ae60'
+                    elif avg_ping < 80:
+                        device['ping_status'] = 'Good'
+                        device['ping_icon'] = '🟡'
+                        device['ping_color'] = '#f39c12'
+                    elif avg_ping < 150:
+                        device['ping_status'] = 'Fair'
+                        device['ping_icon'] = '🟠'
+                        device['ping_color'] = '#e67e22'
                     else:
-                        device['ping_status'] = 'No Response'
+                        device['ping_status'] = 'Poor'
                         device['ping_icon'] = '🔴'
                         device['ping_color'] = '#e74c3c'
                 else:
-                    device['ping_ms'] = 0
-                    device['ping_status'] = 'Offline'
-                    device['ping_icon'] = '⚫'
-                    device['ping_color'] = '#95a5a6'
-            
-            time.sleep(2)  # Ping mỗi 2 giây
+                    # Ping failed - tăng fail counter
+                    fail_count = device.get('ping_fail_count', 0) + 1
+                    device['ping_fail_count'] = fail_count
+                    
+                    # Chỉ báo "No Response" sau 3 lần fail liên tiếp (tăng từ 2)
+                    if fail_count >= 3:
+                        ping_history[device_key] = []
+                        device['ping_status'] = 'No Response'
+                        device['ping_icon'] = '⚫'
+                        device['ping_color'] = '#95a5a6'
+                        device['ping_ms'] = 0
+                    # Nếu mới fail 1-2 lần, giữ nguyên status cũ
+            else:
+                device['ping_ms'] = 0
+                device['ping_status'] = 'Offline'
+                device['ping_icon'] = '⚫'
+                device['ping_color'] = '#95a5a6'
+                device['ping_fail_count'] = 0
+                ping_history[device_key] = []
         except Exception as e:
-            print(f"Error in ping checker: {e}")
+            pass  # Tắt log để giảm overhead
+    
+    while True:
+        try:
+            # ✅ Ping tất cả devices song song bằng threads (không cần lock)
+            threads = []
+            for device_key in list(esp_devices.keys()):
+                device = esp_devices[device_key]
+                t = threading.Thread(target=ping_single_device, args=(device_key, device), daemon=True)
+                t.start()
+                threads.append(t)
+            
+            # Đợi tất cả ping threads hoàn thành (timeout 1.2s thay vì 1.5s)
+            for t in threads:
+                t.join(timeout=1.2)
+            
+            time.sleep(2.5)  # ✅ Ping mỗi 2.5 giây (tối ưu giữa responsive và load)
+        except Exception as e:
+            pass
 
 def parse_heartbeat(message):
     """Parse heartbeat message format: HEARTBEAT:Cube 3,IP:192.168.1.3,HELLO"""
@@ -221,6 +289,13 @@ def udp_listener(port=1509):
                         }
                         print(f"New device registered: {parsed['name']} ({parsed['ip']}) - Port: {device_port}")
                         
+                        # Assign layer index for Resolume
+                        global next_layer_index
+                        if device_key not in device_layer_index:
+                            device_layer_index[device_key] = next_layer_index
+                            print(f"📊 {device_key} assigned to Layer {next_layer_index}")
+                            next_layer_index += 1
+                        
                         # Start device-specific listener if not already running
                         if device_key not in device_listeners:
                             start_device_listener(device_key, device_port)
@@ -301,8 +376,8 @@ def start_device_listener(device_key, port):
                     message = data.decode('utf-8').strip()
                     
                     # Debug: Print raw message if contains IR_ADC
-                    if 'IR_ADC' in message:
-                        print(f"[DEBUG] Raw message: '{message}'")
+                    # if 'IR_ADC' in message:
+                        # print(f"[DEBUG] Raw message: '{message}'")
                     
                     # Parse IR_ADC frames (support multiple channels)
                     if 'IR_ADC' in message:
@@ -337,7 +412,7 @@ def start_device_listener(device_key, port):
                                     if len(device_ir_adc[device_key][channel_key]['history']) > 100:
                                         device_ir_adc[device_key][channel_key]['history'].pop(0)
                                     
-                                    print(f"✓ {device_key} {channel_key.upper()}: {adc_value}")
+                                    # print(f"✓ {device_key} {channel_key.upper()}: {adc_value}")
                             elif message.startswith('IR_ADC:'):
                                 # Legacy format: IR_ADC:4095 or IR_ADC:,4095
                                 value_str = message.split('IR_ADC:')[1].strip()
@@ -360,7 +435,7 @@ def start_device_listener(device_key, port):
                                 if len(device_ir_adc[device_key]['ir_adc_1']['history']) > 100:
                                     device_ir_adc[device_key]['ir_adc_1']['history'].pop(0)
                                 
-                                print(f"✓ {device_key} IR_ADC_1: {adc_value}")
+                                # print(f"✓ {device_key} IR_ADC_1: {adc_value}")
                                 
                             # Update global timestamp
                             device_ir_adc[device_key]['timestamp'] = datetime.now().strftime('%H:%M:%S')
@@ -391,7 +466,26 @@ def start_device_listener(device_key, port):
                         try:
                             face_status = message.split('FACE_1:')[1].strip().upper()
                             if face_status in ['TOUCH', 'UP', 'DOWN', 'NONE']:
+                                # Store previous status to detect transitions
+                                previous_status = device_ir_adc[device_key].get('face_1', 'NONE')
                                 device_ir_adc[device_key]['face_1'] = face_status
+                                
+                                # Activate touch flag when FACE = TOUCH
+                                if face_status == 'TOUCH':
+                                    if not device_touch_flag.get(device_key, False):
+                                        # Transition to TOUCH - start touch handler
+                                        device_touch_flag[device_key] = True
+                                        layer = device_layer_index.get(device_key, 1)
+                                        touch_handler.on_touch_start(device_key, layer)
+                                        print(f"🔴 {device_key} TOUCH FLAG ACTIVATED!")
+                                else:
+                                    if device_touch_flag.get(device_key, False):
+                                        # Transition from TOUCH to non-TOUCH - end touch handler
+                                        device_touch_flag[device_key] = False
+                                        layer = device_layer_index.get(device_key, 1)
+                                        touch_handler.on_touch_end(device_key, layer)
+                                        print(f"⚪ {device_key} TOUCH FLAG DEACTIVATED")
+                                
                                 print(f"✓ {device_key} FACE_1: {face_status}")
                         except Exception as e:
                             print(f"Error parsing FACE data: {e}")
@@ -506,6 +600,33 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"Error selecting device: {e}")
                 self.send_error(500, str(e))
+                
+        elif self.path == '/api/update-layer-indices':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                layer_map = data.get('layer_map')  # {device_key: layer_index}
+                
+                if layer_map:
+                    global device_layer_index
+                    for device_key, layer_idx in layer_map.items():
+                        device_layer_index[device_key] = layer_idx
+                        print(f"📊 Updated {device_key} to Layer {layer_idx}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    
+                    response = json.dumps({'success': True})
+                    self.wfile.write(response.encode())
+                else:
+                    self.send_error(400, "Missing layer_map")
+            except Exception as e:
+                print(f"Error updating layer indices: {e}")
+                self.send_error(500, str(e))
         else:
             self.send_error(404)
     
@@ -543,9 +664,21 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                 uptime = int(current_time - device['first_seen'])
                 uptime_str = f"{uptime//3600}h {(uptime%3600)//60}m {uptime%60}s"
                 
+                # Get FACE status from device_ir_adc if available
+                face_status = 'NONE'
+                if device_key in device_ir_adc and 'face_1' in device_ir_adc[device_key]:
+                    face_status = device_ir_adc[device_key]['face_1']
+                
+                # Get touch flag
+                touch_flag = device_touch_flag.get(device_key, False)
+                
+                # Get layer index
+                layer_index = device_layer_index.get(device_key, 0)
+                
                 devices_list.append({
                     'name': device['name'],
                     'ip': device['ip'],
+                    'device_key': device_key,
                     'is_online': device['is_online'],
                     'status': device['status'],
                     'heartbeat_count': device['heartbeat_count'],
@@ -555,7 +688,10 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                     'ping_ms': device.get('ping_ms', 0),
                     'ping_status': device.get('ping_status', 'Unknown'),
                     'ping_icon': device.get('ping_icon', '⏳'),
-                    'ping_color': device.get('ping_color', '#95a5a6')
+                    'ping_color': device.get('ping_color', '#95a5a6'),
+                    'face_status': face_status,
+                    'touch_flag': touch_flag,
+                    'layer_index': layer_index
                 })
             
             response = json.dumps(devices_list)

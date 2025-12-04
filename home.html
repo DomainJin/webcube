@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Home - CUBE TOUCH</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -14,33 +14,6 @@
         <div class="card">
             <div class="card-header" style="background-color: #3498db;">
                 <h2>🏠 CUBE TOUCH SYSTEM DASHBOARD</h2>
-            </div>
-        </div>
-
-        <!-- ESP Data Display -->
-        <div class="card">
-            <div class="card-header" style="background-color: #e74c3c;">
-                <h2>📡 ESP32 DATA (Port 1509)</h2>
-            </div>
-            <div class="card-content">
-                <div class="data-display">
-                    <div class="data-item">
-                        <label>📊 Raw Data:</label>
-                        <div id="raw-data" class="data-value">Waiting for data...</div>
-                    </div>
-                    <div class="data-item">
-                        <label>⏰ Last Update:</label>
-                        <div id="timestamp" class="data-value">-</div>
-                    </div>
-                    <div class="data-item">
-                        <label>📈 Packet Count:</label>
-                        <div id="packet-count" class="data-value">0</div>
-                    </div>
-                    <div class="status-indicator">
-                        <span id="status-dot" class="status-dot offline"></span>
-                        <span id="status-text">Waiting for connection...</span>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -59,83 +32,81 @@
 
     <script src="navbar.js"></script>
     <script>
-        // Fetch ESP data from server API
-        function updateESPData() {
-            fetch('/api/esp-data')
-                .then(response => response.json())
-                .then(data => {
-                    // Update raw data
-                    document.getElementById('raw-data').textContent = data.raw_data;
-                    document.getElementById('timestamp').textContent = data.timestamp || '-';
-                    document.getElementById('packet-count').textContent = data.count;
-                    
-                    // Update status
-                    const statusDot = document.getElementById('status-dot');
-                    const statusText = document.getElementById('status-text');
-                    
-                    if (data.count > 0 && data.timestamp) {
-                        statusDot.className = 'status-dot online';
-                        statusText.textContent = 'Connected - Receiving data';
-                    } else {
-                        statusDot.className = 'status-dot offline';
-                        statusText.textContent = 'Waiting for connection...';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching ESP data:', error);
-                });
-        }
-        
         // Fetch ESP devices status
+        let devicesData = [];
+        const MAX_LAYERS = 6; // Maximum number of layer slots
+        
         function updateESPDevices() {
             fetch('/api/esp-devices')
                 .then(response => response.json())
                 .then(devices => {
+                    devicesData = devices;
                     const listContainer = document.getElementById('esp-devices-list');
                     const countHeader = document.getElementById('esp-count');
-                    
-                    if (devices.length === 0) {
-                        listContainer.innerHTML = '<p class="empty-state">⏳ Waiting for ESP32 devices...<br>Devices will appear here when they send heartbeat signals.</p>';
-                        countHeader.textContent = '📡 ESP32 DEVICES STATUS (0 Online / 0 Total)';
-                        return;
-                    }
                     
                     // Count online devices
                     const onlineCount = devices.filter(d => d.is_online).length;
                     countHeader.textContent = `📡 ESP32 DEVICES STATUS (${onlineCount} Online / ${devices.length} Total)`;
                     
-                    // Build devices HTML
+                    // Create layer slots
                     let html = '';
-                    devices.forEach(device => {
-                        const bgColor = device.is_online ? '#e8f5e8' : '#ffe6e6';
-                        const statusColor = device.is_online ? '#27ae60' : '#e74c3c';
-                        const statusIcon = device.is_online ? '🟢' : '🔴';
-                        
-                        // Ping display
-                        let pingDisplay = '';
-                        if (device.ping_ms > 0) {
-                            pingDisplay = `<div style="color: ${device.ping_color};">${device.ping_icon} Ping: ${device.ping_ms}ms (${device.ping_status})</div>`;
-                        } else {
-                            pingDisplay = `<div style="color: ${device.ping_color};">${device.ping_icon} Ping: ${device.ping_status}</div>`;
-                        }
-                        
-                        // Calculate port from IP
-                        const ipParts = device.ip.split('.');
-                        const lastOctet = ipParts[3];
-                        const port = lastOctet + '00';
-                        
-                        // Access button
-                        const accessButton = device.is_online 
-                            ? `<button class="btn-access" onclick="accessDevice('${device.ip}', ${port})">🔗 Access</button>`
-                            : '';
+                    for (let layer = 1; layer <= MAX_LAYERS; layer++) {
+                        // Find device assigned to this layer
+                        const device = devices.find(d => d.layer_index === layer);
                         
                         html += `
-                            <div class="device-card" style="background-color: ${bgColor};">
-                                <div class="device-status" style="background-color: ${statusColor};">
-                                    <span class="status-icon">${statusIcon}</span>
-                                    <span class="status-text">${device.status}</span>
-                                </div>
-                                <div class="device-info">
+                            <div class="layer-slot" 
+                                 data-layer="${layer}"
+                                 ondragover="handleLayerDragOver(event)"
+                                 ondrop="handleLayerDrop(event)"
+                                 ondragleave="handleLayerDragLeave(event)">
+                                <div class="layer-slot-header">🎬 Layer ${layer}</div>
+                        `;
+                        
+                        if (device) {
+                            // Render device card
+                            const bgColor = device.is_online ? '#e8f5e8' : '#ffe6e6';
+                            const statusColor = device.is_online ? '#27ae60' : '#e74c3c';
+                            const statusIcon = device.is_online ? '🟢' : '🔴';
+                            
+                            let pingDisplay = '';
+                            if (device.ping_ms > 0) {
+                                pingDisplay = `<div style="color: ${device.ping_color};">${device.ping_icon} Ping: ${device.ping_ms}ms (${device.ping_status})</div>`;
+                            } else {
+                                pingDisplay = `<div style="color: ${device.ping_color};">${device.ping_icon} Ping: ${device.ping_status}</div>`;
+                            }
+                            
+                            const faceConfig = {
+                                'TOUCH': { emoji: '👆', color: '#e74c3c', text: 'TOUCH' },
+                                'UP': { emoji: '⬆️', color: '#3498db', text: 'UP' },
+                                'DOWN': { emoji: '⬇️', color: '#f39c12', text: 'DOWN' },
+                                'NONE': { emoji: '⚪', color: '#95a5a6', text: 'NONE' }
+                            };
+                            const faceInfo = faceConfig[device.face_status] || faceConfig['NONE'];
+                            const faceDisplay = `<div style="color: ${faceInfo.color};">🎭 Face: ${faceInfo.emoji} ${faceInfo.text}</div>`;
+                            
+                            const ipParts = device.ip.split('.');
+                            const lastOctet = ipParts[3];
+                            const port = lastOctet + '00';
+                            
+                            const accessButton = device.is_online 
+                                ? `<button class="btn-access" onclick="accessDevice('${device.ip}', ${port})">🔗 Access</button>`
+                                : '';
+                            
+                            html += `
+                                <div class="device-card" 
+                                     draggable="true" 
+                                     data-device-key="${device.device_key}"
+                                     style="background-color: ${bgColor};"
+                                     ondragstart="handleDeviceDragStart(event)"
+                                     ondragend="handleDeviceDragEnd(event)"
+                                     ontouchstart="handleTouchStart(event)"
+                                     ontouchmove="handleTouchMove(event)"
+                                     ontouchend="handleTouchEnd(event)">
+                                    <div class="device-status" style="background-color: ${statusColor};">
+                                        <span class="status-icon">${statusIcon}</span>
+                                        <span class="status-text">${device.status}</span>
+                                    </div>
                                     <div class="device-name">📱 ${device.name}</div>
                                     <div class="device-ip">🌐 ${device.ip} : ${port}</div>
                                     <div class="device-stats">
@@ -143,18 +114,217 @@
                                         <div>📊 Count: ${device.heartbeat_count}</div>
                                         <div>🕐 Uptime: ${device.uptime}</div>
                                         ${pingDisplay}
+                                        ${faceDisplay}
                                     </div>
                                     ${accessButton}
                                 </div>
-                            </div>
-                        `;
-                    });
+                            `;
+                        } else {
+                            // Empty slot
+                            html += '<div class="layer-slot-empty">Drop device here</div>';
+                        }
+                        
+                        html += '</div>';
+                    }
                     
                     listContainer.innerHTML = html;
                 })
                 .catch(error => {
                     console.error('Error fetching ESP devices:', error);
                 });
+        }
+        
+        // Drag and Drop handlers for layer-based system (with touch support)
+        let draggedDeviceKey = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let isDragging = false;
+        
+        function handleDeviceDragStart(e) {
+            draggedDeviceKey = e.target.dataset.deviceKey;
+            e.target.classList.add('dragging');
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+            }
+        }
+        
+        // Touch handlers
+        function handleTouchStart(e) {
+            const card = e.target.closest('.device-card');
+            if (!card) return;
+            
+            draggedDeviceKey = card.dataset.deviceKey;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            isDragging = false;
+            
+            card.classList.add('dragging');
+        }
+        
+        function handleTouchMove(e) {
+            if (!draggedDeviceKey) return;
+            
+            const touch = e.touches[0];
+            const moveX = Math.abs(touch.clientX - touchStartX);
+            const moveY = Math.abs(touch.clientY - touchStartY);
+            
+            if (moveX > 10 || moveY > 10) {
+                isDragging = true;
+                e.preventDefault(); // Prevent scrolling
+            }
+            
+            if (isDragging) {
+                // Highlight layer slot under touch
+                const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (elementUnderTouch) {
+                    let layerSlot = elementUnderTouch.closest('.layer-slot');
+                    
+                    // Remove all drag-over classes
+                    document.querySelectorAll('.layer-slot').forEach(slot => {
+                        slot.classList.remove('drag-over');
+                    });
+                    
+                    // Add to current slot
+                    if (layerSlot) {
+                        layerSlot.classList.add('drag-over');
+                    }
+                }
+            }
+        }
+        
+        function handleTouchEnd(e) {
+            if (!draggedDeviceKey || !isDragging) {
+                // Reset
+                draggedDeviceKey = null;
+                isDragging = false;
+                document.querySelectorAll('.device-card').forEach(card => {
+                    card.classList.remove('dragging');
+                });
+                document.querySelectorAll('.layer-slot').forEach(slot => {
+                    slot.classList.remove('drag-over');
+                });
+                return;
+            }
+            
+            const touch = e.changedTouches[0];
+            const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+            
+            if (elementUnderTouch) {
+                let layerSlot = elementUnderTouch.closest('.layer-slot');
+                
+                if (layerSlot && draggedDeviceKey) {
+                    const targetLayer = parseInt(layerSlot.dataset.layer);
+                    
+                    // Update layer index
+                    const layerMap = {};
+                    layerMap[draggedDeviceKey] = targetLayer;
+                    
+                    // Send to server
+                    fetch('/api/update-layer-indices', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ layer_map: layerMap })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Layer index updated:', data);
+                        updateESPDevices(); // Refresh display
+                    })
+                    .catch(error => {
+                        console.error('Error updating layer index:', error);
+                    });
+                }
+            }
+            
+            // Cleanup
+            draggedDeviceKey = null;
+            isDragging = false;
+            document.querySelectorAll('.device-card').forEach(card => {
+                card.classList.remove('dragging');
+            });
+            document.querySelectorAll('.layer-slot').forEach(slot => {
+                slot.classList.remove('drag-over');
+            });
+        }
+        
+        function handleDeviceDragEnd(e) {
+            e.target.classList.remove('dragging');
+            // Remove drag-over class from all layer slots
+            document.querySelectorAll('.layer-slot').forEach(slot => {
+                slot.classList.remove('drag-over');
+            });
+        }
+        
+        function handleLayerDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Find the layer slot (might be the slot itself or a parent)
+            let layerSlot = e.target;
+            while (layerSlot && !layerSlot.classList.contains('layer-slot')) {
+                layerSlot = layerSlot.parentElement;
+            }
+            if (layerSlot) {
+                layerSlot.classList.add('drag-over');
+            }
+            return false;
+        }
+        
+        function handleLayerDragLeave(e) {
+            let layerSlot = e.target;
+            while (layerSlot && !layerSlot.classList.contains('layer-slot')) {
+                layerSlot = layerSlot.parentElement;
+            }
+            if (layerSlot && !layerSlot.contains(e.relatedTarget)) {
+                layerSlot.classList.remove('drag-over');
+            }
+        }
+        
+        function handleLayerDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            
+            // Find the layer slot
+            let layerSlot = e.target;
+            while (layerSlot && !layerSlot.classList.contains('layer-slot')) {
+                layerSlot = layerSlot.parentElement;
+            }
+            
+            if (layerSlot && draggedDeviceKey) {
+                const targetLayer = parseInt(layerSlot.dataset.layer);
+                
+                // Update layer index for the dragged device
+                const layerMap = {};
+                layerMap[draggedDeviceKey] = targetLayer;
+                
+                // Send to server
+                fetch('/api/update-layer-indices', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ layer_map: layerMap })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Layer index updated:', data);
+                    updateESPDevices(); // Refresh display
+                })
+                .catch(error => {
+                    console.error('Error updating layer index:', error);
+                });
+            }
+            
+            layerSlot.classList.remove('drag-over');
+            return false;
         }
         
         // Access device function
@@ -191,12 +361,10 @@
             }
         }
         
-        // Update every 500ms
-        setInterval(updateESPData, 500);
+        // Update every 1 second
         setInterval(updateESPDevices, 1000);
         
         // Initial update
-        updateESPData();
         updateESPDevices();
     </script>
 </body>

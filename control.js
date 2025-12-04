@@ -144,13 +144,33 @@ function testLED() {
     sendCommand(command);
 }
 
+// Xilanh animation state
+let pistonPosition = 0; // 0 = bottom, 100 = top
+let pistonInterval = null;
+let cycleTime = 5.0; // seconds for full cycle (0% to 100%)
+
+// Calculate animation parameters based on cycle time
+function getAnimationParams() {
+    const ANIMATION_INTERVAL = 50; // ms between updates (fixed for smooth animation)
+    const totalSteps = (cycleTime * 1000) / ANIMATION_INTERVAL; // number of updates in full cycle
+    const PISTON_SPEED = 100 / totalSteps; // % per update to complete in cycleTime
+    return { PISTON_SPEED, ANIMATION_INTERVAL };
+}
+
+// Set cycle time
+function setCycleTime(value) {
+    cycleTime = parseFloat(value);
+    document.getElementById('cycle-time-value').textContent = cycleTime.toFixed(1);
+}
+
 // Xilanh Control Functions
 function xilanhUp() {
     const command = 'XILANH:2';
     sendCommand(command).then(success => {
         if (success) {
-            document.getElementById('xilanh-status').textContent = '🔵 XI LANH: MOVING UP';
+            document.getElementById('xilanh-status').textContent = '🟢 XI LANH: MOVING UP';
             document.getElementById('xilanh-status').style.color = '#27ae60';
+            animatePiston('up');
         }
     });
 }
@@ -161,6 +181,7 @@ function xilanhDown() {
         if (success) {
             document.getElementById('xilanh-status').textContent = '🔵 XI LANH: MOVING DOWN';
             document.getElementById('xilanh-status').style.color = '#3498db';
+            animatePiston('down');
         }
     });
 }
@@ -170,9 +191,63 @@ function xilanhStop() {
     sendCommand(command).then(success => {
         if (success) {
             document.getElementById('xilanh-status').textContent = '🔴 XI LANH: STOPPED';
-            document.getElementById('xilanh-status').style.color = '#8e44ad';
+            document.getElementById('xilanh-status').style.color = '#e74c3c';
+            stopPiston();
         }
     });
+}
+
+// Animate piston movement
+function animatePiston(direction) {
+    stopPiston(); // Clear any existing animation
+    
+    const cylinderHeight = 200; // Height of cylinder container
+    const pistonHeight = 60;    // Height of piston
+    const maxTravel = cylinderHeight - pistonHeight; // 140px max travel distance
+    
+    const { PISTON_SPEED, ANIMATION_INTERVAL } = getAnimationParams();
+    
+    pistonInterval = setInterval(() => {
+        const piston = document.getElementById('piston');
+        const positionText = document.getElementById('piston-position');
+        
+        if (!piston || !positionText) return;       
+        
+        if (direction === 'up') {
+            pistonPosition = Math.min(100, pistonPosition + PISTON_SPEED);
+        } else if (direction === 'down') {
+            pistonPosition = Math.max(0, pistonPosition - PISTON_SPEED);
+        }
+        
+        // Calculate bottom position in pixels: 0% = 0px (bottom), 100% = 140px (top)
+        const bottomPosition = (pistonPosition / 100) * maxTravel;
+        piston.style.bottom = `${bottomPosition}px`;
+        positionText.textContent = `Vị trí: ${Math.round(pistonPosition)}%`;
+        
+        // Stop at limits and send STOP command
+        if (pistonPosition >= 100 || pistonPosition <= 0) {
+            stopPiston();
+            // Send STOP command when reaching 0% or 100%
+            sendCommand('XILANH:0').then(success => {
+                if (success) {
+                    console.log(`Xi lanh reached ${Math.round(pistonPosition)}%, sent STOP command`);
+                    // Update status display
+                    const statusElement = document.getElementById('xilanh-status');
+                    if (statusElement) {
+                        statusElement.textContent = '🟢 XI LANH: STOPPED (Auto)';
+                        statusElement.style.color = '#27ae60';
+                    }
+                }
+            });
+        }
+    }, ANIMATION_INTERVAL);
+}
+
+function stopPiston() {
+    if (pistonInterval) {
+        clearInterval(pistonInterval);
+        pistonInterval = null;
+    }
 }
 
 // Touch Control Functions
