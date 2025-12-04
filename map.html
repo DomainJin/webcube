@@ -10,6 +10,11 @@
     <div id="navbar-container"></div>
 
     <div class="content">
+        <!-- Device Info -->
+        <div class="device-info-banner">
+            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+        </div>
+
         <div class="card">
             <div class="card-header" style="background-color: #27ae60;">
                 <h2>🗺️ MAP</h2>
@@ -21,5 +26,34 @@
     </div>
 
     <script src="navbar.js"></script>
+    <script>
+        // Device selection
+        let selectedDevice = null;
+        let devicePort = null;
+
+        // Update device display banner
+        function updateDeviceBanner(device) {
+            const banner = document.querySelector('.device-info-display');
+            if (device) {
+                banner.innerHTML = `✅ Đang kết nối: <strong>${device.name}</strong> (${device.ip}) - Port: ${devicePort}`;
+                banner.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            } else {
+                banner.innerHTML = '⚠️ Chưa chọn thiết bị';
+                banner.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            }
+        }
+
+        // Initialize device when page loads
+        fetch('/api/selected-device')
+            .then(response => response.json())
+            .then(data => {
+                if (data.device) {
+                    selectedDevice = data.device;
+                    devicePort = data.port;
+                    updateDeviceBanner(selectedDevice);
+                }
+            })
+            .catch(error => console.error('Error getting selected device:', error));
+    </script>
 </body>
 </html>

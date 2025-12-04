@@ -59,6 +59,9 @@ device_listeners = {}  # {device_key: {'port': 300, 'thread': thread_obj, 'sock'
 device_layer_index = {}  # {device_key: layer_number}
 next_layer_index = 1  # Counter for assigning layers
 
+# Global variable to store motion data per device (COMPASS and MAG)
+device_motion_data = {}  # {device_key: {'compass': {'heading': 0, 'direction': 'N', 'raw': []}, 'mag': {'x': 0, 'y': 0, 'z': 0, 'raw': []}}}
+
 def ping_device(ip):
     """Ping device và trả về latency (ms)"""
     try:
@@ -359,6 +362,21 @@ def start_device_listener(device_key, port):
             'threshold': '43202'
         }
     
+    if device_key not in device_motion_data:
+        device_motion_data[device_key] = {
+            'compass': {
+                'heading': 0.0,
+                'direction': 'N',
+                'raw_frames': []
+            },
+            'mag': {
+                'x': 0,
+                'y': 0,
+                'z': 0,
+                'raw_frames': []
+            }
+        }
+    
     def device_udp_listener():
         """Device-specific UDP listener"""
         try:
@@ -375,9 +393,9 @@ def start_device_listener(device_key, port):
                     data, addr = sock.recvfrom(1024)
                     message = data.decode('utf-8').strip()
                     
-                    # Debug: Print raw message if contains IR_ADC
-                    # if 'IR_ADC' in message:
-                        # print(f"[DEBUG] Raw message: '{message}'")
+                    # Debug: Print all messages
+                    if message and not message.startswith('IR_ADC'):
+                        print(f"[{device_key}] Received: {message}")
                     
                     # Parse IR_ADC frames (support multiple channels)
                     if 'IR_ADC' in message:
@@ -489,6 +507,48 @@ def start_device_listener(device_key, port):
                                 print(f"✓ {device_key} FACE_1: {face_status}")
                         except Exception as e:
                             print(f"Error parsing FACE data: {e}")
+                    
+                    # Parse COMPASS data (COMPASS:heading,offset,direction)
+                    elif message.startswith('COMPASS:'):
+                        try:
+                            parts = message.split('COMPASS:')[1].split(',')
+                            if len(parts) == 3:
+                                heading = float(parts[0].strip())
+                                direction = parts[2].strip()
+                                
+                                device_motion_data[device_key]['compass']['heading'] = heading
+                                device_motion_data[device_key]['compass']['direction'] = direction
+                                
+                                # Keep last 3 raw frames
+                                device_motion_data[device_key]['compass']['raw_frames'].append(message)
+                                if len(device_motion_data[device_key]['compass']['raw_frames']) > 3:
+                                    device_motion_data[device_key]['compass']['raw_frames'].pop(0)
+                                
+                                print(f"✓ {device_key} COMPASS: {heading}° {direction}")
+                        except Exception as e:
+                            print(f"Error parsing COMPASS data: {e}")
+                    
+                    # Parse MAG data (MAG:x,y,z)
+                    elif message.startswith('MAG:'):
+                        try:
+                            parts = message.split('MAG:')[1].split(',')
+                            if len(parts) == 3:
+                                x = int(parts[0].strip())
+                                y = int(parts[1].strip())
+                                z = int(parts[2].strip())
+                                
+                                device_motion_data[device_key]['mag']['x'] = x
+                                device_motion_data[device_key]['mag']['y'] = y
+                                device_motion_data[device_key]['mag']['z'] = z
+                                
+                                # Keep last 3 raw frames
+                                device_motion_data[device_key]['mag']['raw_frames'].append(message)
+                                if len(device_motion_data[device_key]['mag']['raw_frames']) > 3:
+                                    device_motion_data[device_key]['mag']['raw_frames'].pop(0)
+                                
+                                print(f"✓ {device_key} MAG: X={x} Y={y} Z={z}")
+                        except Exception as e:
+                            print(f"Error parsing MAG data: {e}")
                             
                 except socket.timeout:
                     continue  # Normal timeout, continue listening
@@ -696,6 +756,38 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
             
             response = json.dumps(devices_list)
             self.wfile.write(response.encode())
+        
+        elif self.path == '/api/motion-data':
+            # API endpoint to get motion sensor data (COMPASS and MAG) for selected device
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            # Get selected device or first available device
+            device_key = selected_device
+            if not device_key and esp_devices:
+                device_key = list(esp_devices.keys())[0]
+            
+            # Return motion data or empty structure
+            if device_key and device_key in device_motion_data:
+                response = json.dumps(device_motion_data[device_key])
+            else:
+                response = json.dumps({
+                    'compass': {
+                        'heading': 0.0,
+                        'direction': 'N',
+                        'raw_frames': []
+                    },
+                    'mag': {
+                        'x': 0,
+                        'y': 0,
+                        'z': 0,
+                        'raw_frames': []
+                    }
+                })
+            
+            self.wfile.write(response.encode())
             
         elif self.path.startswith('/api/ir-adc'):
             # API endpoint để lấy IR ADC data for specific device
@@ -778,6 +870,7 @@ def run_server(port=8000, udp_port=1509):
     print(f"UDP Listener:      Port {udp_port}")
     print(f"API Endpoint:      http://{ip}:{port}/api/esp-data")
     print(f"API Devices:       http://{ip}:{port}/api/esp-devices")
+    print(f"API Motion Data:   http://{ip}:{port}/api/motion-data")
     print(f"======================================")
     print(f"Nhấn Ctrl+C để dừng server")
     print(f"======================================\n")

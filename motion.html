@@ -10,16 +10,242 @@
     <div id="navbar-container"></div>
 
     <div class="content">
+        <!-- Device Info -->
+        <div class="device-info-banner">
+            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+        </div>
+
+        <!-- COMPASS Card -->
         <div class="card">
-            <div class="card-header" style="background-color: #e67e22;">
-                <h2>🎭 MOTION CONTROL</h2>
+            <div class="card-header" style="background-color: #3498db;">
+                <h2>🧭 COMPASS (Processed data - Ưu tiên NORMAL)</h2>
             </div>
             <div class="card-content">
-                <p class="placeholder-text">Motion tracking và control features sẽ được phát triển tại đây</p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <!-- Compass Visualization -->
+                    <div style="text-align: center;">
+                        <canvas id="compass-canvas" width="250" height="250" style="border: 2px solid #3498db; border-radius: 50%; background: #ecf0f1;"></canvas>
+                        <div style="margin-top: 10px;">
+                            <span style="font-size: 24px; font-weight: bold; color: #3498db;" id="compass-heading">0°</span>
+                            <span style="font-size: 18px; color: #7f8c8d; margin-left: 10px;" id="compass-direction">N</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Compass Raw Data -->
+                    <div>
+                        <h3 style="color: #3498db; margin-bottom: 10px;">📊 Raw Data:</h3>
+                        <div style="background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace;">
+                            <div id="compass-raw-data">
+                                <div>COMPASS:<span id="compass-1">-45</span>,<span id="compass-2">-5</span>,<span id="compass-3">NE</span></div>
+                                <div style="margin-top: 5px;">COMPASS:<span id="compass-4">180</span>,<span id="compass-5">2</span>,<span id="compass-6">S</span></div>
+                                <div style="margin-top: 5px;">COMPASS:<span id="compass-7">270</span>,<span id="compass-8">0</span>,<span id="compass-9">W</span></div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 13px; color: #7f8c8d;">
+                            <div>📍 <strong>heading</strong>: Góc 0-360° (float, 1 chữ số thập phân)</div>
+                            <div>📍 <strong>direction</strong>: N, NE, E, SE, S, SW, W, NW</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAG Card -->
+        <div class="card">
+            <div class="card-header" style="background-color: #e74c3c;">
+                <h2>🧲 MAG (Raw data - Ưu tiên LOW)</h2>
+            </div>
+            <div class="card-content">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center;">
+                    <!-- X Axis -->
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 14px; opacity: 0.9;">X Axis</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="mag-x">-147</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Magnetometer</div>
+                    </div>
+                    
+                    <!-- Y Axis -->
+                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 14px; opacity: 0.9;">Y Axis</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="mag-y">-1438</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Magnetometer</div>
+                    </div>
+                    
+                    <!-- Z Axis -->
+                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 14px; opacity: 0.9;">Z Axis</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="mag-z">110</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Magnetometer</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace;">
+                    <h3 style="color: #e74c3c; margin-bottom: 10px;">📊 Raw Data Stream:</h3>
+                    <div id="mag-raw-data">
+                        <div>MAG:<span id="mag-raw-1">-147,-1438,110</span></div>
+                        <div style="margin-top: 5px;">MAG:<span id="mag-raw-2">523,545,1623</span></div>
+                        <div style="margin-top: 5px;">MAG:<span id="mag-raw-3">-1207,-1308,-172</span></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="navbar.js"></script>
+    <script>
+        // Device selection
+        let selectedDevice = null;
+        let devicePort = null;
+
+        // Update device display banner
+        function updateDeviceBanner(device) {
+            const banner = document.querySelector('.device-info-display');
+            if (device) {
+                banner.innerHTML = `✅ Đang kết nối: <strong>${device.name}</strong> (${device.ip}) - Port: ${devicePort}`;
+                banner.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            } else {
+                banner.innerHTML = '⚠️ Chưa chọn thiết bị';
+                banner.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            }
+        }
+
+        // Initialize device when page loads
+        fetch('/api/selected-device')
+            .then(response => response.json())
+            .then(data => {
+                if (data.device) {
+                    selectedDevice = data.device;
+                    devicePort = data.port;
+                    updateDeviceBanner(selectedDevice);
+                }
+            })
+            .catch(error => console.error('Error getting selected device:', error));
+    </script>
+    <script>
+        // Compass visualization
+        function drawCompass(heading) {
+            const canvas = document.getElementById('compass-canvas');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 100;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw outer circle
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Draw cardinal directions
+            ctx.font = 'bold 18px Arial';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // N
+            ctx.fillText('N', centerX, centerY - radius - 20);
+            // E
+            ctx.fillText('E', centerX + radius + 20, centerY);
+            // S
+            ctx.fillText('S', centerX, centerY + radius + 20);
+            // W
+            ctx.fillText('W', centerX - radius - 20, centerY);
+            
+            // Draw heading needle
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate((heading - 90) * Math.PI / 180);
+            
+            // Red arrow pointing to heading
+            ctx.beginPath();
+            ctx.moveTo(radius - 10, 0);
+            ctx.lineTo(10, -8);
+            ctx.lineTo(10, 8);
+            ctx.closePath();
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+            
+            // Blue tail
+            ctx.beginPath();
+            ctx.moveTo(-10, 0);
+            ctx.lineTo(-30, -5);
+            ctx.lineTo(-30, 5);
+            ctx.closePath();
+            ctx.fillStyle = '#3498db';
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Draw center dot
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#2c3e50';
+            ctx.fill();
+        }
+        
+        // Update compass heading
+        function updateCompass(heading, direction) {
+            document.getElementById('compass-heading').textContent = heading.toFixed(1) + '°';
+            document.getElementById('compass-direction').textContent = direction;
+            drawCompass(heading);
+        }
+        
+        // Initialize with default values
+        updateCompass(0, 'N');
+        
+        // Fetch real motion data from server
+        function updateMotionData() {
+            fetch('/api/motion-data')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Motion data received:', data); // DEBUG LOG
+                    
+                    // Update COMPASS display
+                    if (data.compass) {
+                        updateCompass(data.compass.heading, data.compass.direction);
+                        
+                        // Update raw frames display
+                        const compassRawDiv = document.getElementById('compass-raw-data');
+                        if (data.compass.raw_frames && data.compass.raw_frames.length > 0) {
+                            compassRawDiv.innerHTML = data.compass.raw_frames
+                                .map(frame => `<div>${frame}</div>`)
+                                .join('');
+                        } else {
+                            compassRawDiv.innerHTML = '<div>Waiting for COMPASS data...</div>';
+                        }
+                    }
+                    
+                    // Update MAG display
+                    if (data.mag) {
+                        document.getElementById('mag-x').textContent = data.mag.x || 0;
+                        document.getElementById('mag-y').textContent = data.mag.y || 0;
+                        document.getElementById('mag-z').textContent = data.mag.z || 0;
+                        
+                        // Update raw frames display
+                        const magRawDiv = document.getElementById('mag-raw-data');
+                        if (data.mag.raw_frames && data.mag.raw_frames.length > 0) {
+                            magRawDiv.innerHTML = data.mag.raw_frames
+                                .map(frame => `<div>${frame}</div>`)
+                                .join('');
+                        } else {
+                            magRawDiv.innerHTML = '<div>Waiting for MAG data...</div>';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching motion data:', error);
+                });
+        }
+        
+        // Initial fetch and update every second
+        updateMotionData();
+        setInterval(updateMotionData, 1000);
+    </script>
 </body>
 </html>
