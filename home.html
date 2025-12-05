@@ -19,8 +19,11 @@
 
         <!-- ESP Devices Status Card -->
         <div class="card">
-            <div class="card-header" style="background-color: #27ae60;">
-                <h2 id="esp-count">📡 ESP32 DEVICES STATUS (0 Online / 0 Total)</h2>
+            <div class="card-header" style="background-color: #27ae60; display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="esp-count" style="margin: 0;">📡 ESP32 DEVICES STATUS (0 Online / 0 Total)</h2>
+                <button class="btn btn-warning" onclick="configAllDevices()" style="padding: 4px 10px; font-size: 11px; white-space: nowrap;">
+                    ⚙️ Config All
+                </button>
             </div>
             <div class="card-content">
                 <div id="esp-devices-list">
@@ -330,6 +333,10 @@
         // Access device function
         window.accessDevice = function(ip, port) {
             if (confirm(`Kết nối với ${ip}:${port}?\n\nESP32 sẽ nhận lệnh điều khiển trên port này.`)) {
+                // Exit Config All mode when accessing single device
+                localStorage.removeItem('configAllActive');
+                localStorage.removeItem('configAllDevices');
+                
                 // Calculate device_key (name from IP)
                 const lastOctet = ip.split('.').pop();
                 const deviceKey = `Cube ${lastOctet}_${ip}`;
@@ -359,6 +366,35 @@
                     alert(`✓ Đã lưu local: ${ip}:${port}\n\nBạn có thể điều khiển thiết bị này từ tab Config và Monitor.`);
                 });
             }
+        }
+        
+        // Config All Devices function
+        function configAllDevices() {
+            // Get all online devices
+            const onlineDevices = devicesData.filter(d => d.is_online);
+            
+            if (onlineDevices.length === 0) {
+                alert('⚠️ Không có thiết bị nào online!\n\nVui lòng đợi thiết bị kết nối trước khi sử dụng Config All.');
+                return;
+            }
+            
+            // Confirm action
+            const confirmMsg = `🔧 Config All Devices\n\n` +
+                `Sẽ chuyển đến tab Config và gửi cấu hình đến:\n` +
+                `${onlineDevices.map(d => `• ${d.name} (${d.ip})`).join('\n')}\n\n` +
+                `Tổng: ${onlineDevices.length} thiết bị online\n\n` +
+                `Tiếp tục?`;
+            
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+            
+            // Store list of online devices for config page
+            localStorage.setItem('configAllDevices', JSON.stringify(onlineDevices));
+            localStorage.setItem('configAllActive', 'true');
+            
+            // Navigate to config page
+            window.location.href = 'config.html';
         }
         
         // Update every 1 second

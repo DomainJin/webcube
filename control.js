@@ -1,5 +1,19 @@
 // Control functions for ESP32
 function getSelectedDevice() {
+    // Check if Config All mode is active (priority check)
+    const configAllDevices = JSON.parse(localStorage.getItem('configAllDevices') || '[]');
+    const configAllActive = localStorage.getItem('configAllActive') === 'true';
+    
+    if (configAllActive && configAllDevices.length > 0) {
+        // Return array of all devices for Config All mode
+        console.log('Config All mode active:', configAllDevices.length, 'devices');
+        return configAllDevices.map(d => ({
+            ip: d.ip,
+            port: d.port
+        }));
+    }
+    
+    // Single device mode
     const ip = localStorage.getItem('selected_esp_ip');
     const port = localStorage.getItem('selected_esp_port');
     
@@ -15,6 +29,43 @@ function sendCommand(command) {
     const device = getSelectedDevice();
     if (!device) return Promise.reject('No device selected');
     
+    // Check if device is an array (Config All mode)
+    if (Array.isArray(device)) {
+        console.log(`Sending command to ${device.length} devices:`, command);
+        
+        // Send command to all devices
+        const promises = device.map(d => 
+            fetch('/api/send-command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ip: d.ip,
+                    port: d.port,
+                    command: command
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(`Command sent to ${d.ip}:${d.port}:`, data.success ? '✓' : '✗');
+                return data.success;
+            })
+            .catch(error => {
+                console.error(`Error sending to ${d.ip}:${d.port}:`, error);
+                return false;
+            })
+        );
+        
+        // Wait for all commands to complete
+        return Promise.all(promises).then(results => {
+            const successCount = results.filter(r => r).length;
+            console.log(`Config All: ${successCount}/${device.length} devices responded`);
+            return successCount > 0;
+        });
+    }
+    
+    // Single device mode
     return fetch('/api/send-command', {
         method: 'POST',
         headers: {

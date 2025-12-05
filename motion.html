@@ -89,6 +89,46 @@
                 </div>
             </div>
         </div>
+
+        <!-- SPEED Card -->
+        <div class="card">
+            <div class="card-header" style="background-color: #f39c12;">
+                <h2>⚡ SPEED (Motor Speed - Ưu tiên NORMAL)</h2>
+            </div>
+            <div class="card-content">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center;">
+                    <!-- Motor 1 Speed -->
+                    <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 14px; opacity: 0.9;">Motor 1</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="speed-s1">0</div>
+                        <div style="font-size: 12px; opacity: 0.8;">RPM / Speed</div>
+                    </div>
+                    
+                    <!-- Motor 2 Speed -->
+                    <div style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 14px; opacity: 0.9;">Motor 2</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="speed-s2">0</div>
+                        <div style="font-size: 12px; opacity: 0.8;">RPM / Speed</div>
+                    </div>
+                    
+                    <!-- Motor 3 Speed -->
+                    <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #2c3e50; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 14px; opacity: 0.9;">Motor 3</div>
+                        <div style="font-size: 32px; font-weight: bold; margin: 10px 0;" id="speed-s3">0</div>
+                        <div style="font-size: 12px; opacity: 0.8;">RPM / Speed</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace;">
+                    <h3 style="color: #f39c12; margin-bottom: 10px;">📊 Raw Data Stream:</h3>
+                    <div id="speed-raw-data">
+                        <div>SPEED:<span id="speed-raw-1">0,0,0</span></div>
+                        <div style="margin-top: 5px;">SPEED:<span id="speed-raw-2">100,200,150</span></div>
+                        <div style="margin-top: 5px;">SPEED:<span id="speed-raw-3">50,75,80</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="navbar.js"></script>
@@ -237,15 +277,32 @@
                             magRawDiv.innerHTML = '<div>Waiting for MAG data...</div>';
                         }
                     }
+                    
+                    // Update SPEED display
+                    if (data.speed) {
+                        document.getElementById('speed-s1').textContent = data.speed.s1 || 0;
+                        document.getElementById('speed-s2').textContent = data.speed.s2 || 0;
+                        document.getElementById('speed-s3').textContent = data.speed.s3 || 0;
+                        
+                        // Update raw frames display
+                        const speedRawDiv = document.getElementById('speed-raw-data');
+                        if (data.speed.raw_frames && data.speed.raw_frames.length > 0) {
+                            speedRawDiv.innerHTML = data.speed.raw_frames
+                                .map(frame => `<div>${frame}</div>`)
+                                .join('');
+                        } else {
+                            speedRawDiv.innerHTML = '<div>Waiting for SPEED data...</div>';
+                        }
+                    }
                 })
                 .catch(error => {
                     console.error('Error fetching motion data:', error);
                 });
         }
         
-        // Initial fetch and update every second
+        // ✅ Initial fetch and update every 500ms (realtime)
         updateMotionData();
-        setInterval(updateMotionData, 1000);
+        setInterval(updateMotionData, 500);
     </script>
 </body>
 </html>

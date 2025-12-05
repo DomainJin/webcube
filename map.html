@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Map - CUBE TOUCH</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
     <div id="navbar-container"></div>
@@ -15,17 +17,104 @@
             <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
         </div>
 
-        <div class="card">
+        <!-- Two Column Layout -->
+        <div style="display: grid; grid-template-columns: 400px 1fr; gap: 20px; align-items: start;">
+            <!-- Left Column: Devices & Server Location -->
+            <div>
+                <!-- Device List -->
+                <div class="card">
+                    <div class="card-header" style="background-color: #3498db;">
+                        <h2>📱 DEVICES</h2>
+                    </div>
+                    <div class="card-content">
+                        <div id="device-list" style="display: flex; flex-direction: column; gap: 10px;">
+                            <!-- Device items will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Server Location Card -->
+                <div class="card">
+                    <div class="card-header" style="background-color: #e67e22;">
+                        <h2>📍 SERVER LOCATION</h2>
+                    </div>
+                    <div class="card-content">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <button class="btn btn-primary" onclick="getServerLocation()">🌍 Auto Detect</button>
+                            <button class="btn btn-success" onclick="saveCurrentServerLocation()">💾 Save Location</button>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <button class="btn" id="tile-mode-btn" onclick="toggleTileMode()" style="width: 100%; background: #9b59b6; color: white;">
+                                <span id="tile-mode-icon">🌐</span> <span id="tile-mode-text">Online Mode</span>
+                            </button>
+                        </div>
+                        <div id="location-info" style="background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px;">
+                            <div><strong>Status:</strong> <span id="location-status">Not detected</span></div>
+                            <div style="margin-top: 5px;"><strong>Latitude:</strong> <span id="server-lat">-</span></div>
+                            <div style="margin-top: 5px;"><strong>Longitude:</strong> <span id="server-lng">-</span></div>
+                            <div style="margin-top: 5px;"><strong>Accuracy:</strong> <span id="location-accuracy">-</span></div>
+                        </div>
+                        <div id="google-map" style="width: 100%; height: 250px; margin-top: 10px; border: 2px solid #34495e; border-radius: 8px; background: #ecf0f1; cursor: crosshair;"></div>
+                        <div style="margin-top: 10px; padding: 10px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; font-size: 11px; color: #d35400;">
+                            <strong>⚠️ Độ chính xác:</strong> IP Geolocation sai lệch ~12km.<br>
+                            <strong>🎯 Cách sửa:</strong> Sau khi map hiện, zoom in và <strong>kéo marker đỏ</strong> đến vị trí chính xác của bạn!<br>
+                            <strong>💾 Lưu lại:</strong> Nhấn <strong>"Save Location"</strong> sau khi calib xong để không mất vị trí khi refresh.<br>
+                            <strong>🌐 Offline/Online:</strong> Dùng nút toggle để chuyển giữa offline tiles (nhanh) và online tiles (cần internet để download).
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Right Column: Map Canvas -->
+            <div class="card">
             <div class="card-header" style="background-color: #27ae60;">
-                <h2>🗺️ MAP</h2>
+                <h2>🗺️ POSITION MAP</h2>
             </div>
             <div class="card-content">
-                <p class="placeholder-text">MAP và layout configuration sẽ được phát triển tại đây</p>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <label style="font-weight: bold;">🗺️ View:</label>
+                        <button class="btn btn-primary" id="view-grid-btn" onclick="switchToGridView()" style="padding: 5px 15px; font-size: 12px;">📐 Grid View</button>
+                        <button class="btn btn-success" id="view-map-btn" onclick="switchToMapView()" style="padding: 5px 15px; font-size: 12px;">🌍 Real Map</button>
+                    </div>
+                    <div>
+                        <label style="font-weight: bold;">🧭 Calibration:</label>
+                        <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="adjustNorth(-1)">◀ -1°</button>
+                        <span id="north-offset" style="display: inline-block; min-width: 50px; text-align: center; font-weight: bold;">0°</span>
+                        <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="adjustNorth(1)">+1° ▶</button>
+                        <button class="btn btn-warning" style="padding: 5px 10px; font-size: 12px; margin-left: 5px;" onclick="resetNorth()">⟲ Reset</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-success" onclick="savePositions()">💾 Save Positions</button>
+                        <button class="btn btn-danger" onclick="clearPositions()">🗑️ Clear All</button>
+                    </div>
+                </div>
+                
+                <!-- Grid Canvas View -->
+                <div id="grid-view" style="position: relative; background: #ecf0f1; border: 2px solid #34495e; border-radius: 8px; overflow: hidden; display: block;">
+                    <canvas id="map-canvas" width="1000" height="600" style="display: block; cursor: crosshair;"></canvas>
+                </div>
+                
+                <!-- Real Map View -->
+                <div id="real-map-view" style="position: relative; background: #ecf0f1; border: 2px solid #34495e; border-radius: 8px; overflow: hidden; display: none; height: 600px;">
+                    <div id="real-google-map" style="width: 100%; height: 100%;"></div>
+                </div>
+                
+                <div style="margin-top: 15px; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
+                    <h4 style="margin: 0 0 10px 0; color: #2980b9;">📍 Device Positions:</h4>
+                    <div id="position-list" style="font-family: monospace; font-size: 13px; color: #34495e;">
+                        <div style="color: #7f8c8d;">No devices placed yet. Drag devices from the list above onto the map.</div>
+                    </div>
+                </div>
             </div>
+        </div>
         </div>
     </div>
 
     <script src="navbar.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Device selection
         let selectedDevice = null;
@@ -54,6 +143,1006 @@
                 }
             })
             .catch(error => console.error('Error getting selected device:', error));
+
+        // Map functionality
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!canvas || !ctx) {
+            console.error('Canvas not found!');
+        } else {
+            console.log('Canvas initialized:', canvas.width, 'x', canvas.height);
+        }
+        
+        let devices = [];
+        let devicePositions = {}; // {device_key: {x, y, gridX, gridY, heading, lat, lng}}
+        let deviceMotionData = {}; // {device_key: {compass: {heading, direction}, mag: {...}}}
+        let gridCols = 10;
+        let gridRows = 10;
+        let cellWidth = canvas.width / gridCols;
+        let cellHeight = canvas.height / gridRows;
+        let draggedDevice = null;
+        
+        // Tile mode: true = offline, false = online
+        let useOfflineTiles = false; // Start with offline mode (no internet needed initially)
+        
+        // Real map variables
+        let leafletMap = null;
+        let leafletServerMarker = null;
+        let realLeafletMap = null;
+        let realMapMarkers = {}; // {device_key: marker}
+        let currentView = 'grid'; // 'grid' or 'map'
+        
+        // Server location variables
+        let serverLocation = null; // {lat, lng, accuracy}
+        let magneticDeclination = 0; // Magnetic declination in degrees (will be calculated from location)
+        let trueNorthOffset = 0; // Manual calibration offset
+
+        // Get server location using IP geolocation (works without HTTPS)
+        function getServerLocation() {
+            document.getElementById('location-status').textContent = 'Detecting...';
+            document.getElementById('location-status').style.color = '#f39c12';
+
+            // Try server-side detection first
+            fetch('/api/detect-server-location')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.location) {
+                        serverLocation = data.location;
+                        updateLocationUI();
+                        initLeafletMap();
+                        console.log('Location detected by server:', serverLocation.city, serverLocation.country);
+                    } else {
+                        // Fallback to client-side detection
+                        console.log('Server detection failed, trying client-side');
+                        getLocationByIP();
+                    }
+                })
+                .catch(error => {
+                    console.error('Server detection error:', error);
+                    // Fallback to client-side detection
+                    getLocationByIP();
+                });
+        }
+
+        // Get location using IP geolocation API
+        function getLocationByIP() {
+            fetch('https://ipapi.co/json/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.latitude && data.longitude) {
+                        serverLocation = {
+                            lat: data.latitude,
+                            lng: data.longitude,
+                            accuracy: 1000, // IP-based location is less accurate
+                            source: 'IP'
+                        };
+                        updateLocationUI();
+                        initGoogleMap();
+                        saveServerLocation();
+                        console.log('Location from IP:', data.city, data.country_name);
+                    } else {
+                        throw new Error('No location data');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('location-status').textContent = 'Error: ' + error.message;
+                    document.getElementById('location-status').style.color = '#e74c3c';
+                    console.error('IP Geolocation error:', error);
+                });
+        }
+
+        // Calculate magnetic declination for location (simplified estimation)
+        function calculateMagneticDeclination(lat, lng) {
+            // For Vietnam (approximate): declination is around 0° to -1°
+            // For more accurate: would use NOAA WMM model
+            // This is a simplified approximation
+            if (lat >= 8 && lat <= 24 && lng >= 102 && lng <= 110) {
+                // Vietnam region: approximately -0.5° to -1°
+                magneticDeclination = -0.7;
+            } else {
+                // Default: no correction
+                magneticDeclination = 0;
+            }
+            console.log(`Magnetic declination: ${magneticDeclination}°`);
+        }
+
+        // Update location UI
+        function updateLocationUI() {
+            const sourceText = serverLocation.source === 'IP' ? 
+                `Detected (${serverLocation.city}, ${serverLocation.country}) ✓` : 
+                'Detected (GPS) ✓';
+            document.getElementById('location-status').textContent = sourceText;
+            document.getElementById('location-status').style.color = '#27ae60';
+            document.getElementById('server-lat').textContent = serverLocation.lat.toFixed(6);
+            document.getElementById('server-lng').textContent = serverLocation.lng.toFixed(6);
+            document.getElementById('location-accuracy').textContent = serverLocation.accuracy.toFixed(0) + ' meters';
+            
+            // Calculate magnetic declination
+            calculateMagneticDeclination(serverLocation.lat, serverLocation.lng);
+            
+            // Auto-save to server
+            saveServerLocation();
+        }
+
+        // Initialize Leaflet Map (small preview in Server Location section)
+        function initLeafletMap() {
+            if (!serverLocation) {
+                console.warn('Cannot initialize Leaflet Map: serverLocation is null');
+                return;
+            }
+
+            const mapDiv = document.getElementById('google-map');
+            if (!mapDiv) {
+                console.error('Cannot find google-map div');
+                return;
+            }
+            
+            console.log('Initializing Leaflet Map with location:', serverLocation);
+            
+            try {
+                // Clear existing map if any
+                if (leafletMap) {
+                    leafletMap.remove();
+                }
+                
+                leafletMap = L.map(mapDiv, {
+                    zoomControl: true,
+                    scrollWheelZoom: true
+                }).setView([serverLocation.lat, serverLocation.lng], 18);
+
+                // Use global useOfflineTiles variable
+                if (useOfflineTiles) {
+                    // Local tiles from /tiles folder
+                    L.tileLayer('http://192.168.0.202:8000/tiles/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors (Offline)',
+                        maxZoom: 19,
+                        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==' // Transparent 1x1 pixel
+                    }).addTo(leafletMap);
+                } else {
+                    // Online satellite tiles
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        attribution: '© Esri',
+                        maxZoom: 19
+                    }).addTo(leafletMap);
+                    
+                    // Add labels overlay for street names
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors',
+                        maxZoom: 19,
+                        opacity: 0.4
+                    }).addTo(leafletMap);
+                }
+
+                // Add marker for server location (draggable to adjust)
+                leafletServerMarker = L.marker([serverLocation.lat, serverLocation.lng], {
+                    draggable: true,
+                    icon: L.icon({
+                        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                            <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="20" cy="20" r="12" fill="#e74c3c" stroke="white" stroke-width="3"/>
+                                <circle cx="20" cy="20" r="4" fill="white"/>
+                            </svg>
+                        `),
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
+                    })
+                }).addTo(leafletMap);
+                
+                leafletServerMarker.bindPopup('🖱️ Kéo marker này để điều chỉnh vị trí chính xác!').openPopup();
+                
+                // Update location when marker is dragged
+                leafletServerMarker.on('dragend', function(e) {
+                    const pos = e.target.getLatLng();
+                    serverLocation.lat = pos.lat;
+                    serverLocation.lng = pos.lng;
+                    serverLocation.accuracy = 10; // More accurate after manual adjustment
+                    updateLocationUI();
+                    saveServerLocation();
+                    console.log('Server location updated manually:', serverLocation);
+                });
+
+                // Add accuracy circle
+                L.circle([serverLocation.lat, serverLocation.lng], {
+                    radius: serverLocation.accuracy,
+                    fillColor: '#e74c3c',
+                    fillOpacity: 0.1,
+                    color: '#e74c3c',
+                    weight: 1
+                }).addTo(leafletMap);
+                
+                console.log('Leaflet Map initialized successfully');
+            } catch (error) {
+                console.error('Error initializing Leaflet Map:', error);
+            }
+        }
+
+        // Save server location to backend
+        function saveServerLocation() {
+            if (!serverLocation) return;
+
+            fetch('/api/save-server-location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(serverLocation)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Server location saved to backend:', data);
+            })
+            .catch(error => {
+                console.error('Error saving server location:', error);
+            });
+        }
+
+        // Save current server location to localStorage (persist after refresh)
+        function saveCurrentServerLocation() {
+            if (!serverLocation) {
+                alert('⚠️ Chưa có vị trí! Hãy detect location hoặc kéo marker trước.');
+                return;
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('savedServerLocation', JSON.stringify(serverLocation));
+            
+            // Also save to backend
+            saveServerLocation();
+            
+            alert('✅ Đã lưu vị trí!\nLat: ' + serverLocation.lat.toFixed(6) + '\nLng: ' + serverLocation.lng.toFixed(6));
+            console.log('Server location saved to localStorage:', serverLocation);
+        }
+
+        // Toggle between offline and online tile mode
+        function toggleTileMode() {
+            useOfflineTiles = !useOfflineTiles;
+            
+            // Update button UI
+            const btn = document.getElementById('tile-mode-btn');
+            const icon = document.getElementById('tile-mode-icon');
+            const text = document.getElementById('tile-mode-text');
+            
+            if (useOfflineTiles) {
+                icon.textContent = '📦';
+                text.textContent = 'Offline Mode';
+                btn.style.background = '#95a5a6';
+                console.log('Switched to OFFLINE mode - using local tiles');
+            } else {
+                icon.textContent = '🌐';
+                text.textContent = 'Online Mode';
+                btn.style.background = '#3498db';
+                console.log('Switched to ONLINE mode - using internet tiles');
+            }
+            
+            // Reinitialize map with new tile source
+            if (leafletMap) {
+                initLeafletMap();
+            }
+            
+            // Reinitialize real map if it exists
+            if (realLeafletMap && currentView === 'map') {
+                initRealLeafletMap();
+            }
+            
+            alert(useOfflineTiles ? 
+                '📦 Offline Mode\n\nSử dụng tiles đã tải về.\nNhanh nhưng cần download trước.' : 
+                '🌐 Online Mode\n\nTải tiles từ internet.\nCần kết nối internet để xem map mới.');
+        }
+
+        // Load saved server location from localStorage
+        function loadSavedServerLocation() {
+            const saved = localStorage.getItem('savedServerLocation');
+            if (saved) {
+                try {
+                    const savedLocation = JSON.parse(saved);
+                    serverLocation = savedLocation;
+                    updateLocationUI();
+                    initLeafletMap();
+                    console.log('Loaded saved server location from localStorage:', serverLocation);
+                    
+                    document.getElementById('location-status').textContent = 'Loaded from saved (Ho Chi Minh City, Vietnam) ✓';
+                    document.getElementById('location-status').style.color = '#27ae60';
+                    
+                    // Calculate magnetic declination
+                    calculateMagneticDeclination(serverLocation.lat, serverLocation.lng);
+                } catch (error) {
+                    console.error('Error loading saved location:', error);
+                }
+            }
+        }
+
+        // Load server location from backend
+        function loadServerLocation() {
+            fetch('/api/get-server-location')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.lat && data.lng) {
+                        serverLocation = data;
+                        document.getElementById('location-status').textContent = 'Loaded ✓';
+                        document.getElementById('location-status').style.color = '#27ae60';
+                        document.getElementById('server-lat').textContent = serverLocation.lat.toFixed(6);
+                        document.getElementById('server-lng').textContent = serverLocation.lng.toFixed(6);
+                        document.getElementById('location-accuracy').textContent = (serverLocation.accuracy || 0).toFixed(0) + ' meters';
+                        initGoogleMap();
+                    }
+                })
+                .catch(error => console.error('Error loading server location:', error));
+        }
+
+        // Draw North indicator
+        function drawNorthIndicator() {
+            const x = canvas.width - 60;
+            const y = 50;
+            const size = 40;
+            
+            // Draw circle background
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = '#34495e';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, size / 2, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw North arrow
+            ctx.fillStyle = '#e74c3c';
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y - size / 2 + 5); // Top point
+            ctx.lineTo(x - 8, y + 5); // Bottom left
+            ctx.lineTo(x, y); // Center
+            ctx.lineTo(x + 8, y + 5); // Bottom right
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw South arrow
+            ctx.fillStyle = '#ecf0f1';
+            ctx.strokeStyle = '#95a5a6';
+            ctx.beginPath();
+            ctx.moveTo(x, y + size / 2 - 5); // Bottom point
+            ctx.lineTo(x - 8, y - 5); // Top left
+            ctx.lineTo(x, y); // Center
+            ctx.lineTo(x + 8, y - 5); // Top right
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw "N" label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('N', x, y - size / 2 - 15);
+            
+            // Draw declination info
+            if (magneticDeclination !== 0) {
+                ctx.font = '9px Arial';
+                ctx.fillStyle = '#7f8c8d';
+                ctx.fillText(`Decl: ${magneticDeclination.toFixed(1)}°`, x, y + size / 2 + 15);
+            }
+        }
+
+        // Fetch devices
+        function fetchDevices() {
+            fetch('/api/esp-devices')
+                .then(response => response.json())
+                .then(data => {
+                    devices = data;
+                    updateDeviceList();
+                    fetchMotionData(); // Fetch motion data for all devices
+                })
+                .catch(error => console.error('Error fetching devices:', error));
+        }
+
+        // Fetch motion data for devices
+        function fetchMotionData() {
+            // Fetch motion data for each device that has a position
+            const fetchPromises = [];
+            
+            for (const deviceKey of Object.keys(devicePositions)) {
+                const promise = fetch(`/api/motion-data?device=${encodeURIComponent(deviceKey)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.compass && data.compass.heading !== undefined) {
+                            deviceMotionData[deviceKey] = data;
+                            // Update heading in position
+                            devicePositions[deviceKey].heading = data.compass.heading;
+                            console.log(`Updated ${deviceKey} heading: ${data.compass.heading}°`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Error fetching motion data for ${deviceKey}:`, error);
+                    });
+                
+                fetchPromises.push(promise);
+            }
+            
+            // Redraw after all motion data fetched
+            Promise.all(fetchPromises).then(() => {
+                if (currentView === 'grid') {
+                    drawMap();
+                } else if (currentView === 'map') {
+                    updateRealMapMarkers();
+                }
+            });
+        }
+
+        // Update device list
+        function updateDeviceList() {
+            const listDiv = document.getElementById('device-list');
+            listDiv.innerHTML = devices.map(device => `
+                <div class="device-item" 
+                     draggable="true" 
+                     data-device-key="${device.device_key}"
+                     ondragstart="handleDragStart(event)"
+                     style="padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            color: white; border-radius: 8px; cursor: move; text-align: center; user-select: none;">
+                    <div style="font-weight: bold;">${device.name}</div>
+                    <div style="font-size: 11px; opacity: 0.9;">${device.ip}</div>
+                    <div style="font-size: 10px; opacity: 0.8;">Layer ${device.layer_index || 'N/A'}</div>
+                </div>
+            `).join('');
+        }
+
+        // Update grid
+        function updateGrid() {
+            gridCols = parseInt(document.getElementById('grid-cols').value);
+            gridRows = parseInt(document.getElementById('grid-rows').value);
+            cellWidth = canvas.width / gridCols;
+            cellHeight = canvas.height / gridRows;
+            drawMap();
+        }
+
+        // Draw map
+        function drawMap() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Fill background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw North indicator (top-right corner)
+            drawNorthIndicator();
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#bdc3c7';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let i = 0; i <= gridCols; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * cellWidth, 0);
+                ctx.lineTo(i * cellWidth, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let i = 0; i <= gridRows; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellHeight);
+                ctx.lineTo(canvas.width, i * cellHeight);
+                ctx.stroke();
+            }
+            
+            // Draw grid coordinates
+            ctx.fillStyle = '#34495e';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            // Column numbers (top)
+            for (let i = 0; i < gridCols; i++) {
+                ctx.fillText(i, (i + 0.5) * cellWidth, 5);
+            }
+            
+            // Row numbers (left side)
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i < gridRows; i++) {
+                ctx.fillText(i, 5, (i + 0.5) * cellHeight);
+            }
+            
+            // Draw center crosshairs for each cell (optional visual aid)
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < gridCols; i++) {
+                for (let j = 0; j < gridRows; j++) {
+                    const centerX = (i + 0.5) * cellWidth;
+                    const centerY = (j + 0.5) * cellHeight;
+                    
+                    // Small crosshair
+                    ctx.beginPath();
+                    ctx.moveTo(centerX - 5, centerY);
+                    ctx.lineTo(centerX + 5, centerY);
+                    ctx.moveTo(centerX, centerY - 5);
+                    ctx.lineTo(centerX, centerY + 5);
+                    ctx.stroke();
+                }
+            }
+            
+            // Draw placed devices
+            for (const [deviceKey, pos] of Object.entries(devicePositions)) {
+                const device = devices.find(d => d.device_key === deviceKey);
+                if (device) {
+                    // Draw device circle
+                    const centerX = pos.x;
+                    const centerY = pos.y;
+                    
+                    // Outer glow
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = device.is_online ? '#2ecc71' : '#e74c3c';
+                    
+                    // Device circle
+                    ctx.fillStyle = device.is_online ? '#27ae60' : '#c0392b';
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Reset shadow
+                    ctx.shadowBlur = 0;
+                    
+                    // Draw NORTH reference arrow (red, fixed direction)
+                    const northArrowLength = 15;
+                    const northAngleRad = -Math.PI / 2; // Always point up (North)
+                    
+                    const northTipX = centerX + Math.cos(northAngleRad) * northArrowLength;
+                    const northTipY = centerY + Math.sin(northAngleRad) * northArrowLength;
+                    
+                    // Draw north arrow line
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(northTipX, northTipY);
+                    ctx.stroke();
+                    
+                    // Draw north arrowhead
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.beginPath();
+                    const northHeadAngle1 = northAngleRad + Math.PI * 0.85;
+                    const northHeadAngle2 = northAngleRad - Math.PI * 0.85;
+                    ctx.moveTo(northTipX, northTipY);
+                    ctx.lineTo(northTipX + Math.cos(northHeadAngle1) * 5, northTipY + Math.sin(northHeadAngle1) * 5);
+                    ctx.lineTo(northTipX + Math.cos(northHeadAngle2) * 5, northTipY + Math.sin(northHeadAngle2) * 5);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Draw "N" label for north arrow
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText('N', northTipX, northTipY - 2);
+                    
+                    // Draw COMPASS direction arrow (yellow/orange, actual heading)
+                    const rawHeading = pos.heading || 0; // Get heading from position data
+                    
+                    // Apply magnetic declination and manual offset to get true heading
+                    const trueHeading = rawHeading + magneticDeclination + trueNorthOffset;
+                    
+                    const arrowLength = 35;
+                    const arrowWidth = 10;
+                    
+                    // Convert heading to radians (0° = North = up on canvas)
+                    // Canvas: 0° is right, so subtract 90° to make 0° = up
+                    const angleRad = (trueHeading - 90) * (Math.PI / 180);
+                    
+                    // Calculate arrow tip position
+                    const tipX = centerX + Math.cos(angleRad) * arrowLength;
+                    const tipY = centerY + Math.sin(angleRad) * arrowLength;
+                    
+                    // Draw arrow line
+                    ctx.strokeStyle = '#f39c12';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY);
+                    ctx.lineTo(tipX, tipY);
+                    ctx.stroke();
+                    
+                    // Draw arrowhead
+                    ctx.fillStyle = '#f39c12';
+                    ctx.beginPath();
+                    const arrowHeadAngle1 = angleRad + Math.PI * 0.85;
+                    const arrowHeadAngle2 = angleRad - Math.PI * 0.85;
+                    ctx.moveTo(tipX, tipY);
+                    ctx.lineTo(tipX + Math.cos(arrowHeadAngle1) * arrowWidth, tipY + Math.sin(arrowHeadAngle1) * arrowWidth);
+                    ctx.lineTo(tipX + Math.cos(arrowHeadAngle2) * arrowWidth, tipY + Math.sin(arrowHeadAngle2) * arrowWidth);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Display heading value (show both raw and corrected)
+                    ctx.fillStyle = '#f39c12';
+                    ctx.font = 'bold 11px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${Math.round(trueHeading)}°`, centerX, centerY - 40);
+                    
+                    // Show raw heading in smaller font
+                    ctx.fillStyle = '#95a5a6';
+                    ctx.font = '9px Arial';
+                    ctx.fillText(`(raw: ${Math.round(rawHeading)}°)`, centerX, centerY - 28);
+                    
+                    // Device name
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(device.name.split(' ')[1] || device.name, centerX, centerY + 4);
+                    
+                    // Grid coordinates
+                    ctx.fillStyle = '#34495e';
+                    ctx.font = '10px Arial';
+                    ctx.fillText(`(${pos.gridX}, ${pos.gridY})`, centerX, centerY + 35);
+                }
+            }
+            
+            updatePositionList();
+        }
+
+        // Update position list
+        function updatePositionList() {
+            const listDiv = document.getElementById('position-list');
+            
+            if (Object.keys(devicePositions).length === 0) {
+                listDiv.innerHTML = '<div style="color: #7f8c8d;">No devices placed yet. Drag devices from the list above onto the map.</div>';
+                return;
+            }
+            
+            let html = '';
+            for (const [deviceKey, pos] of Object.entries(devicePositions)) {
+                const device = devices.find(d => d.device_key === deviceKey);
+                if (device) {
+                    html += `<div style="margin: 5px 0; padding: 5px; background: white; border-radius: 4px;">
+                        <strong>${device.name}</strong>: Grid(${pos.gridX}, ${pos.gridY}) | Pixel(${Math.round(pos.x)}, ${Math.round(pos.y)})
+                        <button onclick="removeDevice('${deviceKey}')" style="float: right; padding: 2px 8px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>
+                    </div>`;
+                }
+            }
+            listDiv.innerHTML = html;
+        }
+
+        // Drag handlers
+        function handleDragStart(event) {
+            draggedDevice = event.target.dataset.deviceKey;
+            event.dataTransfer.effectAllowed = 'move';
+        }
+
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!draggedDevice) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Calculate grid position
+            const gridX = Math.floor(x / cellWidth);
+            const gridY = Math.floor(y / cellHeight);
+            
+            // Snap to grid center
+            const snapX = (gridX + 0.5) * cellWidth;
+            const snapY = (gridY + 0.5) * cellHeight;
+            
+            // Calculate lat/lng coordinates
+            const {lat, lng} = gridToLatLng(gridX, gridY);
+            
+            devicePositions[draggedDevice] = {
+                x: snapX,
+                y: snapY,
+                gridX: gridX,
+                gridY: gridY,
+                lat: lat,
+                lng: lng
+            };
+            
+            if (currentView === 'grid') {
+                drawMap();
+            } else {
+                updateRealMapMarkers();
+            }
+            draggedDevice = null;
+        });
+
+        // Remove device
+        function removeDevice(deviceKey) {
+            delete devicePositions[deviceKey];
+            drawMap();
+        }
+
+        // Adjust north calibration
+        function adjustNorth(degrees) {
+            trueNorthOffset += degrees;
+            document.getElementById('north-offset').textContent = (trueNorthOffset > 0 ? '+' : '') + trueNorthOffset + '°';
+            if (currentView === 'grid') {
+                drawMap();
+            } else {
+                updateRealMapMarkers();
+            }
+            console.log(`North offset adjusted to: ${trueNorthOffset}°`);
+        }
+
+        // Reset north calibration
+        function resetNorth() {
+            trueNorthOffset = 0;
+            document.getElementById('north-offset').textContent = '0°';
+            if (currentView === 'grid') {
+                drawMap();
+            } else {
+                updateRealMapMarkers();
+            }
+            console.log('North offset reset to 0°');
+        }
+
+        // Switch to Grid View
+        function switchToGridView() {
+            currentView = 'grid';
+            document.getElementById('grid-view').style.display = 'block';
+            document.getElementById('real-map-view').style.display = 'none';
+            document.getElementById('view-grid-btn').classList.add('btn-primary');
+            document.getElementById('view-map-btn').classList.remove('btn-success');
+            drawMap();
+        }
+
+        // Switch to Real Map View
+        function switchToMapView() {
+            if (!serverLocation) {
+                alert('⚠️ Vui lòng nhấn "Get Current Location" trước để phát hiện vị trí server!');
+                return;
+            }
+            
+            console.log('Switching to Real Map view with server location:', serverLocation);
+            currentView = 'map';
+            document.getElementById('grid-view').style.display = 'none';
+            document.getElementById('real-map-view').style.display = 'block';
+            document.getElementById('view-grid-btn').classList.remove('btn-primary');
+            document.getElementById('view-map-btn').classList.add('btn-success');
+            
+            // Wait for DOM to update before initializing map
+            setTimeout(() => {
+                // Initialize real map if not already done
+                if (!realLeafletMap) {
+                    initRealLeafletMap();
+                } else {
+                    // Recenter and update markers
+                    realLeafletMap.setView([serverLocation.lat, serverLocation.lng], 20);
+                    updateRealMapMarkers();
+                }
+            }, 100);
+        }
+
+        // Initialize Real Leaflet Map (full screen satellite view)
+        function initRealLeafletMap() {
+            if (!serverLocation) {
+                console.error('Cannot initialize real map: serverLocation is null');
+                return;
+            }
+            
+            const mapDiv = document.getElementById('real-google-map');
+            if (!mapDiv) {
+                console.error('Cannot find real-google-map div');
+                return;
+            }
+            
+            console.log('Initializing real Leaflet map with center:', serverLocation);
+            
+            try {
+                // Clear existing map if any
+                if (realLeafletMap) {
+                    realLeafletMap.remove();
+                }
+                
+                realLeafletMap = L.map(mapDiv).setView([serverLocation.lat, serverLocation.lng], 20);
+
+                // Use global useOfflineTiles variable
+                if (useOfflineTiles) {
+                    // Local tiles from /tiles folder
+                    L.tileLayer('http://192.168.0.202:8000/tiles/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors (Offline)',
+                        maxZoom: 19,
+                        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=='
+                    }).addTo(realLeafletMap);
+                } else {
+                    // Online satellite tiles
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        attribution: '© Esri',
+                        maxZoom: 19
+                    }).addTo(realLeafletMap);
+                    
+                    // Add labels overlay
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors',
+                        maxZoom: 19,
+                        opacity: 0.3
+                    }).addTo(realLeafletMap);
+                }
+                
+                console.log('Real Leaflet Map initialized successfully');
+                updateRealMapMarkers();
+            } catch (error) {
+                console.error('Error initializing real map:', error);
+            }
+        }
+
+        // Update markers on real map
+        function updateRealMapMarkers() {
+            if (!realLeafletMap || !serverLocation) return;
+
+            // Track which devices are still on map
+            const currentDeviceKeys = new Set(Object.keys(devicePositions));
+            
+            // Remove markers for devices no longer on map
+            for (const key in realMapMarkers) {
+                if (!currentDeviceKeys.has(key)) {
+                    realLeafletMap.removeLayer(realMapMarkers[key]);
+                    delete realMapMarkers[key];
+                }
+            }
+
+            // Update or add device markers
+            for (const [deviceKey, pos] of Object.entries(devicePositions)) {
+                const device = devices.find(d => d.device_key === deviceKey);
+                if (device && pos.lat && pos.lng) {
+                    const rawHeading = pos.heading || 0;
+                    const trueHeading = rawHeading + magneticDeclination + trueNorthOffset;
+                    const arrowColor = device.is_online ? '#27ae60' : '#c0392b';
+
+                    // Check if marker already exists
+                    if (realMapMarkers[deviceKey]) {
+                        // Update existing marker icon with new heading
+                        const arrowIcon = L.divIcon({
+                            html: `<div style="transform: rotate(${trueHeading}deg); width: 40px; height: 40px;">
+                                <svg width="40" height="40" viewBox="0 0 40 40" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
+                                    <path d="M 20,5 L 10,30 L 20,25 L 30,30 Z" 
+                                          fill="${arrowColor}" 
+                                          stroke="white" 
+                                          stroke-width="2"/>
+                                </svg>
+                            </div>`,
+                            className: 'arrow-marker',
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 20]
+                        });
+                        
+                        realMapMarkers[deviceKey].setIcon(arrowIcon);
+                        realMapMarkers[deviceKey].setLatLng([pos.lat, pos.lng]);
+                        
+                        // Update popup content
+                        realMapMarkers[deviceKey].getPopup().setContent(`<div style="color: #2c3e50; font-family: Arial;">
+                            <strong>${device.name}</strong><br>
+                            Heading: ${Math.round(trueHeading)}° (raw: ${Math.round(rawHeading)}°)<br>
+                            Position: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}<br>
+                            Grid: (${pos.gridX}, ${pos.gridY})
+                        </div>`);
+                    } else {
+                        // Create new marker
+                        const arrowIcon = L.divIcon({
+                            html: `<div style="transform: rotate(${trueHeading}deg); width: 40px; height: 40px;">
+                                <svg width="40" height="40" viewBox="0 0 40 40" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
+                                    <path d="M 20,5 L 10,30 L 20,25 L 30,30 Z" 
+                                          fill="${arrowColor}" 
+                                          stroke="white" 
+                                          stroke-width="2"/>
+                                </svg>
+                            </div>`,
+                            className: 'arrow-marker',
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 20]
+                        });
+
+                        const marker = L.marker([pos.lat, pos.lng], { icon: arrowIcon }).addTo(realLeafletMap);
+                        
+                        marker.bindPopup(`<div style="color: #2c3e50; font-family: Arial;">
+                            <strong>${device.name}</strong><br>
+                            Heading: ${Math.round(trueHeading)}° (raw: ${Math.round(rawHeading)}°)<br>
+                            Position: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}<br>
+                            Grid: (${pos.gridX}, ${pos.gridY})
+                        </div>`);
+
+                        realMapMarkers[deviceKey] = marker;
+                    }
+                }
+            }
+        }
+
+        // When dragging on canvas, calculate lat/lng from grid position
+        function gridToLatLng(gridX, gridY) {
+            if (!serverLocation) return null;
+
+            // Assume 1 grid cell = 1 meter (adjustable)
+            const metersPerCell = 1;
+            
+            // Calculate offset in meters from server location
+            const offsetEast = (gridX - gridCols / 2) * metersPerCell;
+            const offsetNorth = -(gridY - gridRows / 2) * metersPerCell; // Y axis is inverted
+
+            // Convert meters to degrees (approximate)
+            const latOffset = offsetNorth / 111320; // 1 degree latitude ≈ 111320 meters
+            const lngOffset = offsetEast / (111320 * Math.cos(serverLocation.lat * Math.PI / 180));
+
+            return {
+                lat: serverLocation.lat + latOffset,
+                lng: serverLocation.lng + lngOffset
+            };
+        }
+
+        // Save positions
+        function savePositions() {
+            fetch('/api/save-positions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    positions: devicePositions,
+                    grid: { cols: gridCols, rows: gridRows }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('✅ Positions saved successfully!');
+            })
+            .catch(error => {
+                console.error('Error saving positions:', error);
+                alert('❌ Failed to save positions');
+            });
+        }
+
+        // Clear positions
+        function clearPositions() {
+            if (confirm('Are you sure you want to clear all positions?')) {
+                devicePositions = {};
+                drawMap();
+            }
+        }
+
+        // Load saved positions
+        function loadPositions() {
+            fetch('/api/get-positions')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.positions) {
+                        devicePositions = data.positions;
+                        if (data.grid) {
+                            document.getElementById('grid-cols').value = data.grid.cols;
+                            document.getElementById('grid-rows').value = data.grid.rows;
+                            updateGrid();
+                        }
+                        drawMap();
+                    }
+                })
+                .catch(error => console.error('Error loading positions:', error));
+        }
+
+        // Initialize
+        drawMap(); // Draw initial grid immediately
+        fetchDevices();
+        loadPositions();
+        loadSavedServerLocation(); // Load saved location from localStorage first
+        loadServerLocation(); // Then try to load from backend (will override if exists)
+        
+        // Set initial button state
+        const icon = document.getElementById('tile-mode-icon');
+        const text = document.getElementById('tile-mode-text');
+        const btn = document.getElementById('tile-mode-btn');
+        if (useOfflineTiles) {
+            icon.textContent = '📦';
+            text.textContent = 'Offline Mode';
+            btn.style.background = '#95a5a6';
+        } else {
+            icon.textContent = '🌐';
+            text.textContent = 'Online Mode';
+            btn.style.background = '#3498db';
+        }
+        
+        setInterval(fetchDevices, 2000); // Update devices every 2 seconds
+        setInterval(fetchMotionData, 1000); // Update motion data every 1 second
     </script>
 </body>
 </html>

@@ -12,7 +12,7 @@
     <div class="content">
         <!-- Device Info -->
         <div class="device-info-banner">
-            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+            <p class="device-info-display" id="device-info-display">⚠️ Chưa chọn thiết bị</p>
         </div>
 
         <div class="grid-4">
@@ -123,6 +123,33 @@
     <script src="navbar.js"></script>
     <script src="control.js"></script>
     <script>
+        // Check if Config All mode is active
+        const configAllActive = localStorage.getItem('configAllActive') === 'true';
+        const configAllDevices = JSON.parse(localStorage.getItem('configAllDevices') || '[]');
+        
+        if (configAllActive && configAllDevices.length > 0) {
+            // Display Config All mode info
+            const banner = document.getElementById('device-info-display');
+            banner.innerHTML = `
+                🔧 <strong>Config All Mode</strong>: ${configAllDevices.length} thiết bị online
+                <button onclick="exitConfigAllMode()" style="margin-left: 15px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    ❌ Thoát Config All
+                </button>
+            `;
+            banner.style.background = 'linear-gradient(135deg, #e67e22 0%, #f39c12 100%)';
+            
+            console.log('Config All Mode active for devices:', configAllDevices);
+        }
+        
+        // Function to exit Config All mode
+        function exitConfigAllMode() {
+            if (confirm('❌ Thoát Config All Mode?\n\nSau khi thoát, bạn sẽ quay về chế độ điều khiển đơn thiết bị.')) {
+                localStorage.removeItem('configAllActive');
+                localStorage.removeItem('configAllDevices');
+                location.reload();
+            }
+        }
+        
         function resetIR() {
             document.getElementById('ir-transmit-slider').value = 0;
             document.getElementById('ir-receive-slider').value = 0;

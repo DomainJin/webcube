@@ -60,7 +60,14 @@ device_layer_index = {}  # {device_key: layer_number}
 next_layer_index = 1  # Counter for assigning layers
 
 # Global variable to store motion data per device (COMPASS and MAG)
-device_motion_data = {}  # {device_key: {'compass': {'heading': 0, 'direction': 'N', 'raw': []}, 'mag': {'x': 0, 'y': 0, 'z': 0, 'raw': []}}}
+device_motion_data = {}  # {device_key: {'compass': {'heading': 0, 'direction': 'N', 'raw_frames': []}, 'mag': {'x': 0, 'y': 0, 'z': 0, 'raw_frames': []}, 'speed': {'s1': 0, 's2': 0, 's3': 0, 'raw_frames': []}}}
+
+# Global variable to store device positions on map
+device_positions = {}  # {device_key: {'x': 0, 'y': 0, 'gridX': 0, 'gridY': 0}}
+map_grid_config = {'cols': 10, 'rows': 10}  # Default grid configuration
+
+# Global variable to store server location (from browser geolocation)
+server_location = {}  # {'lat': 0, 'lng': 0, 'accuracy': 0}
 
 def ping_device(ip):
     """Ping device và trả về latency (ms)"""
@@ -374,6 +381,12 @@ def start_device_listener(device_key, port):
                 'y': 0,
                 'z': 0,
                 'raw_frames': []
+            },
+            'speed': {
+                's1': 0,
+                's2': 0,
+                's3': 0,
+                'raw_frames': []
             }
         }
     
@@ -549,6 +562,34 @@ def start_device_listener(device_key, port):
                                 print(f"✓ {device_key} MAG: X={x} Y={y} Z={z}")
                         except Exception as e:
                             print(f"Error parsing MAG data: {e}")
+                    
+                    # Parse SPEED data (SPEED:s1,s2,s3)
+                    elif message.startswith('SPEED:'):
+                        try:
+                            print(f"[DEBUG] Raw SPEED message: '{message}'")  # DEBUG
+                            parts = message.split('SPEED:')[1].split(',')
+                            print(f"[DEBUG] SPEED parts: {parts}")  # DEBUG
+                            if len(parts) == 3:
+                                s1 = int(parts[0].strip())
+                                s2 = int(parts[1].strip())
+                                s3 = int(parts[2].strip())
+                                
+                                device_motion_data[device_key]['speed']['s1'] = s1
+                                device_motion_data[device_key]['speed']['s2'] = s2
+                                device_motion_data[device_key]['speed']['s3'] = s3
+                                
+                                # Keep last 3 raw frames
+                                device_motion_data[device_key]['speed']['raw_frames'].append(message)
+                                if len(device_motion_data[device_key]['speed']['raw_frames']) > 3:
+                                    device_motion_data[device_key]['speed']['raw_frames'].pop(0)
+                                
+                                print(f"✓ {device_key} SPEED: S1={s1} S2={s2} S3={s3}")
+                            else:
+                                print(f"[DEBUG] SPEED invalid parts count: {len(parts)}")
+                        except Exception as e:
+                            print(f"Error parsing SPEED data: {e}")
+                            import traceback
+                            traceback.print_exc()
                             
                 except socket.timeout:
                     continue  # Normal timeout, continue listening
@@ -608,7 +649,7 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
     
     def do_POST(self):
         """Handle POST requests for control commands"""
-        global selected_device
+        global selected_device, device_positions, map_grid_config, server_location, device_layer_index
         
         if self.path == '/api/send-command':
             content_length = int(self.headers['Content-Length'])
@@ -670,7 +711,6 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                 layer_map = data.get('layer_map')  # {device_key: layer_index}
                 
                 if layer_map:
-                    global device_layer_index
                     for device_key, layer_idx in layer_map.items():
                         device_layer_index[device_key] = layer_idx
                         print(f"📊 Updated {device_key} to Layer {layer_idx}")
@@ -686,6 +726,67 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(400, "Missing layer_map")
             except Exception as e:
                 print(f"Error updating layer indices: {e}")
+                self.send_error(500, str(e))
+        
+        elif self.path == '/api/save-positions':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                positions = data.get('positions')
+                grid = data.get('grid')
+                
+                if positions is not None:
+                    device_positions = positions
+                    if grid:
+                        map_grid_config = grid
+                    
+                    print(f"📍 Saved {len(positions)} device positions")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    
+                    response = json.dumps({'success': True})
+                    self.wfile.write(response.encode())
+                else:
+                    self.send_error(400, "Missing positions")
+            except Exception as e:
+                print(f"Error saving positions: {e}")
+                self.send_error(500, str(e))
+        
+        elif self.path == '/api/save-server-location':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                lat = data.get('lat')
+                lng = data.get('lng')
+                accuracy = data.get('accuracy')
+                
+                if lat is not None and lng is not None:
+                    server_location = {
+                        'lat': lat,
+                        'lng': lng,
+                        'accuracy': accuracy or 0
+                    }
+                    
+                    print(f"📍 Server location saved: {lat:.6f}, {lng:.6f} (±{accuracy:.0f}m)")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    
+                    response = json.dumps({'success': True})
+                    self.wfile.write(response.encode())
+                else:
+                    self.send_error(400, "Missing location data")
+            except Exception as e:
+                print(f"Error saving server location: {e}")
                 self.send_error(500, str(e))
         else:
             self.send_error(404)
@@ -757,22 +858,34 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
             response = json.dumps(devices_list)
             self.wfile.write(response.encode())
         
-        elif self.path == '/api/motion-data':
-            # API endpoint to get motion sensor data (COMPASS and MAG) for selected device
+        elif self.path.startswith('/api/motion-data'):
+            # API endpoint to get motion sensor data (COMPASS and MAG) for specific or selected device
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
-            # Get selected device or first available device
-            device_key = selected_device
+            # Get device_key from query params or use selected device
+            from urllib.parse import urlparse, parse_qs, unquote
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            device_key = params.get('device', [selected_device])[0] if params.get('device') else selected_device
+            
+            # Ensure URL decoding
+            if device_key:
+                device_key = unquote(device_key)
+            
             if not device_key and esp_devices:
                 device_key = list(esp_devices.keys())[0]
+            
+            # Debug log
+            print(f"[Motion API] Requested device: {device_key}, Available: {list(esp_devices.keys())}")
             
             # Return motion data or empty structure
             if device_key and device_key in device_motion_data:
                 response = json.dumps(device_motion_data[device_key])
             else:
+                # Return empty structure even if device not found
                 response = json.dumps({
                     'compass': {
                         'heading': 0.0,
@@ -784,8 +897,95 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                         'y': 0,
                         'z': 0,
                         'raw_frames': []
+                    },
+                    'speed': {
+                        's1': 0,
+                        's2': 0,
+                        's3': 0,
+                        'raw_frames': []
                     }
                 })
+            
+            self.wfile.write(response.encode())
+        
+        elif self.path == '/api/get-positions':
+            # API endpoint to get saved device positions
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = json.dumps({
+                'positions': device_positions,
+                'grid': map_grid_config
+            })
+            self.wfile.write(response.encode())
+        
+        elif self.path == '/api/get-server-location':
+            # API endpoint to get server location
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = json.dumps(server_location)
+            self.wfile.write(response.encode())
+        
+        elif self.path == '/api/detect-server-location':
+            # API endpoint to auto-detect server location using IP geolocation
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            try:
+                import urllib.request
+                # Try multiple geolocation services
+                location_data = None
+                
+                # Try ip-api.com first (free, no key needed, higher rate limit)
+                try:
+                    with urllib.request.urlopen('http://ip-api.com/json/', timeout=5) as response_data:
+                        data = json.loads(response_data.read().decode())
+                        if data.get('status') == 'success':
+                            location_data = {
+                                'lat': data['lat'],
+                                'lng': data['lon'],
+                                'accuracy': 1000,
+                                'source': 'IP',
+                                'city': data.get('city', 'Unknown'),
+                                'country': data.get('country', 'Unknown')
+                            }
+                except Exception as e:
+                    print(f"ip-api.com failed: {e}")
+                
+                # Fallback to ipapi.co
+                if not location_data:
+                    try:
+                        with urllib.request.urlopen('https://ipapi.co/json/', timeout=5) as response_data:
+                            data = json.loads(response_data.read().decode())
+                            if data.get('latitude') and data.get('longitude'):
+                                location_data = {
+                                    'lat': data['latitude'],
+                                    'lng': data['longitude'],
+                                    'accuracy': 1000,
+                                    'source': 'IP',
+                                    'city': data.get('city', 'Unknown'),
+                                    'country': data.get('country_name', 'Unknown')
+                                }
+                    except Exception as e:
+                        print(f"ipapi.co failed: {e}")
+                    
+                if location_data:
+                    server_location = location_data
+                    print(f"📍 Server location detected: {server_location['city']}, {server_location['country']} ({server_location['lat']:.6f}, {server_location['lng']:.6f})")
+                    response = json.dumps({'success': True, 'location': server_location})
+                else:
+                    response = json.dumps({'success': False, 'error': 'All geolocation services failed'})
+            except Exception as e:
+                print(f"Error detecting server location: {e}")
+                response = json.dumps({'success': False, 'error': str(e)})
+                response = json.dumps({'success': False, 'error': str(e)})
             
             self.wfile.write(response.encode())
             
