@@ -590,6 +590,48 @@ def start_device_listener(device_key, port):
                             print(f"Error parsing SPEED data: {e}")
                             import traceback
                             traceback.print_exc()
+                    
+                    # Parse POS data (POS:x,y,heading,vx,vy,omega)
+                    elif message.startswith('POS:'):
+                        try:
+                            print(f"[DEBUG] Raw POS message: '{message}'")  # DEBUG
+                            parts = message.split('POS:')[1].split(',')
+                            print(f"[DEBUG] POS parts: {parts}")  # DEBUG
+                            if len(parts) == 6:
+                                x = float(parts[0].strip())
+                                y = float(parts[1].strip())
+                                heading = float(parts[2].strip())
+                                vx = float(parts[3].strip())
+                                vy = float(parts[4].strip())
+                                omega = float(parts[5].strip())
+                                
+                                # Initialize position data if not exists
+                                if 'position' not in device_motion_data[device_key]:
+                                    device_motion_data[device_key]['position'] = {
+                                        'x': 0, 'y': 0, 'heading': 0,
+                                        'vx': 0, 'vy': 0, 'omega': 0,
+                                        'raw_frames': []
+                                    }
+                                
+                                device_motion_data[device_key]['position']['x'] = x
+                                device_motion_data[device_key]['position']['y'] = y
+                                device_motion_data[device_key]['position']['heading'] = heading
+                                device_motion_data[device_key]['position']['vx'] = vx
+                                device_motion_data[device_key]['position']['vy'] = vy
+                                device_motion_data[device_key]['position']['omega'] = omega
+                                
+                                # Keep last 3 raw frames
+                                device_motion_data[device_key]['position']['raw_frames'].append(message)
+                                if len(device_motion_data[device_key]['position']['raw_frames']) > 3:
+                                    device_motion_data[device_key]['position']['raw_frames'].pop(0)
+                                
+                                print(f"✓ {device_key} POS: x={x:.3f}m y={y:.3f}m heading={heading:.1f}° vx={vx:.3f} vy={vy:.3f}")
+                            else:
+                                print(f"[DEBUG] POS invalid parts count: {len(parts)}")
+                        except Exception as e:
+                            print(f"Error parsing POS data: {e}")
+                            import traceback
+                            traceback.print_exc()
                             
                 except socket.timeout:
                     continue  # Normal timeout, continue listening
@@ -787,6 +829,66 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(400, "Missing location data")
             except Exception as e:
                 print(f"Error saving server location: {e}")
+                self.send_error(500, str(e))
+        
+        elif self.path == '/api/robot-control':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                device_ip = data.get('device_ip')
+                direction = data.get('direction')
+                
+                if device_ip and direction:
+                    # Find device port from esp_devices
+                    device_key = None
+                    for key, device in esp_devices.items():
+                        if device['ip'] == device_ip:
+                            device_key = key
+                            break
+                    
+                    if not device_key:
+                        self.send_response(404)
+                        self.send_header('Content-type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        response = json.dumps({'status': 'error', 'message': 'Device not found'})
+                        self.wfile.write(response.encode())
+                        return
+                    
+                    # Get listener info
+                    listener_info = device_listeners.get(device_key)
+                    if not listener_info:
+                        self.send_response(404)
+                        self.send_header('Content-type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        response = json.dumps({'status': 'error', 'message': 'Device listener not found'})
+                        self.wfile.write(response.encode())
+                        return
+                    
+                    # Send MOVE command to ESP32
+                    command = f"MOVE:{direction}"
+                    success = send_udp_command(device_ip, listener_info['port'], command)
+                    
+                    print(f"🎮 Sent robot command to {device_key}: {command} - {'✅ OK' if success else '❌ FAILED'}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    
+                    response = json.dumps({
+                        'status': 'success' if success else 'error',
+                        'command': command,
+                        'device': device_key
+                    })
+                    self.wfile.write(response.encode())
+                else:
+                    self.send_error(400, "Missing device_ip or direction")
+            except Exception as e:
+                print(f"Error sending robot command: {e}")
                 self.send_error(500, str(e))
         else:
             self.send_error(404)

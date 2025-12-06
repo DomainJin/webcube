@@ -14,7 +14,7 @@
     <div class="content">
         <!-- Device Info -->
         <div class="device-info-banner">
-            <p class="device-info-display">⚠️ Chưa chọn thiết bị</p>
+            <p class="device-info-display" id="device-info-display">⚠️ Chưa chọn thiết bị</p>
         </div>
 
         <!-- Two Column Layout -->
@@ -93,11 +93,11 @@
                 
                 <!-- Grid Canvas View -->
                 <div id="grid-view" style="position: relative; background: #ecf0f1; border: 2px solid #34495e; border-radius: 8px; overflow: hidden; display: block;">
-                    <canvas id="map-canvas" width="1000" height="600" style="display: block; cursor: crosshair;"></canvas>
+                    <canvas id="map-canvas" width="2000" height="1200" style="display: block; cursor: crosshair; max-width: 100%; height: auto;"></canvas>
                 </div>
                 
                 <!-- Real Map View -->
-                <div id="real-map-view" style="position: relative; background: #ecf0f1; border: 2px solid #34495e; border-radius: 8px; overflow: hidden; display: none; height: 600px;">
+                <div id="real-map-view" style="position: relative; background: #ecf0f1; border: 2px solid #34495e; border-radius: 8px; overflow: hidden; display: none; height: 1200px;">
                     <div id="real-google-map" style="width: 100%; height: 100%;"></div>
                 </div>
                 
@@ -116,33 +116,24 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Device selection
-        let selectedDevice = null;
-        let devicePort = null;
-
         // Update device display banner
-        function updateDeviceBanner(device) {
-            const banner = document.querySelector('.device-info-display');
-            if (device) {
-                banner.innerHTML = `✅ Đang kết nối: <strong>${device.name}</strong> (${device.ip}) - Port: ${devicePort}`;
+        function updateDeviceInfo() {
+            const deviceIp = localStorage.getItem('selected_esp_ip');
+            const devicePort = localStorage.getItem('selected_esp_port');
+            const deviceKey = localStorage.getItem('selected_device_key');
+            
+            const banner = document.getElementById('device-info-display');
+            if (deviceIp && devicePort) {
+                banner.textContent = `📡 Connected: ${deviceIp}:${devicePort} (${deviceKey || 'Unknown'})`;
                 banner.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             } else {
-                banner.innerHTML = '⚠️ Chưa chọn thiết bị';
+                banner.textContent = '⚠️ Chưa chọn thiết bị - Vui lòng vào Home và click Access';
                 banner.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
             }
         }
 
-        // Initialize device when page loads
-        fetch('/api/selected-device')
-            .then(response => response.json())
-            .then(data => {
-                if (data.device) {
-                    selectedDevice = data.device;
-                    devicePort = data.port;
-                    updateDeviceBanner(selectedDevice);
-                }
-            })
-            .catch(error => console.error('Error getting selected device:', error));
+        // Initialize on page load
+        updateDeviceInfo();
 
         // Map functionality
         const canvas = document.getElementById('map-canvas');
@@ -157,8 +148,8 @@
         let devices = [];
         let devicePositions = {}; // {device_key: {x, y, gridX, gridY, heading, lat, lng}}
         let deviceMotionData = {}; // {device_key: {compass: {heading, direction}, mag: {...}}}
-        let gridCols = 10;
-        let gridRows = 10;
+        let gridCols = 20;
+        let gridRows = 20;
         let cellWidth = canvas.width / gridCols;
         let cellHeight = canvas.height / gridRows;
         let draggedDevice = null;
@@ -539,18 +530,56 @@
 
         // Fetch motion data for devices
         function fetchMotionData() {
-            // Fetch motion data for each device that has a position
+            // Fetch motion data for ALL devices (not just ones with positions)
             const fetchPromises = [];
             
-            for (const deviceKey of Object.keys(devicePositions)) {
+            // Get all devices from devices array
+            devices.forEach(device => {
+                const deviceKey = device.device_key;
+                
                 const promise = fetch(`/api/motion-data?device=${encodeURIComponent(deviceKey)}`)
                     .then(response => response.json())
                     .then(data => {
+                        deviceMotionData[deviceKey] = data;
+                        
+                        // ✅ Initialize device position if not exists
+                        if (!devicePositions[deviceKey]) {
+                            // Start at center of grid
+                            devicePositions[deviceKey] = {
+                                x: canvas.width / 2,
+                                y: canvas.height / 2,
+                                gridX: Math.floor(gridCols / 2),
+                                gridY: Math.floor(gridRows / 2),
+                                heading: 0
+                            };
+                        }
+                        
+                        // ✅ Update heading from compass
                         if (data.compass && data.compass.heading !== undefined) {
-                            deviceMotionData[deviceKey] = data;
-                            // Update heading in position
                             devicePositions[deviceKey].heading = data.compass.heading;
                             console.log(`Updated ${deviceKey} heading: ${data.compass.heading}°`);
+                        }
+                        
+                        // ✅ Update position from odometry if available (PRIORITY)
+                        if (data.position && data.position.x !== undefined && data.position.y !== undefined) {
+                            // Robot kích thước ~30cm = 0.3m
+                            // Grid 20x20, canvas 2000x1200 → mỗi ô 100x60 pixels
+                            // Scale: 1 meter = 100 pixels (để robot phải di chuyển 10m mới full canvas width)
+                            const scale = 100;
+                            const centerX = canvas.width / 2;
+                            const centerY = canvas.height / 2;
+                            
+                            devicePositions[deviceKey].x = centerX + (data.position.x * scale);
+                            devicePositions[deviceKey].y = centerY - (data.position.y * scale); // Y inverted for canvas
+                            devicePositions[deviceKey].heading = data.position.heading;
+                            
+                            // Update grid position
+                            const cellWidth = canvas.width / gridCols;
+                            const cellHeight = canvas.height / gridRows;
+                            devicePositions[deviceKey].gridX = Math.floor(devicePositions[deviceKey].x / cellWidth);
+                            devicePositions[deviceKey].gridY = Math.floor(devicePositions[deviceKey].y / cellHeight);
+                            
+                            console.log(`✓ ${deviceKey} odometry: x=${data.position.x.toFixed(3)}m y=${data.position.y.toFixed(3)}m → pixel(${devicePositions[deviceKey].x.toFixed(0)}, ${devicePositions[deviceKey].y.toFixed(0)})`);
                         }
                     })
                     .catch(error => {
@@ -558,7 +587,7 @@
                     });
                 
                 fetchPromises.push(promise);
-            }
+            });
             
             // Redraw after all motion data fetched
             Promise.all(fetchPromises).then(() => {

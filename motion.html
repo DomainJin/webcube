@@ -129,37 +129,80 @@
                 </div>
             </div>
         </div>
+
+        <!-- OMNI ROBOT CONTROL Card -->
+        <div class="card">
+            <div class="card-header" style="background-color: #16a085;">
+                <h2>🎮 OMNI ROBOT CONTROL (3 Wheel Drive)</h2>
+            </div>
+            <div class="card-content">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 40px; flex-wrap: wrap;">
+                    <!-- Direction Control Pad -->
+                    <div style="position: relative; width: 200px; height: 200px;">
+                        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%);">
+                            <button id="btn-forward" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                ▲
+                            </button>
+                        </div>
+                        <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
+                            <button id="btn-left" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                ◄
+                            </button>
+                        </div>
+                        <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
+                            <button id="btn-right" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                ►
+                            </button>
+                        </div>
+                        <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);">
+                            <button id="btn-backward" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                ▼
+                            </button>
+                        </div>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; background: #ecf0f1; border: 3px solid #16a085;"></div>
+                    </div>
+
+                    <!-- Stop Button & Status -->
+                    <div style="text-align: center;">
+                        <button id="btn-stop" style="width: 120px; height: 120px; border-radius: 50%; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); border: none; color: white; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.3); margin-bottom: 20px;">
+                            STOP
+                        </button>
+                        <div id="robot-status" style="background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace; color: #2c3e50; font-weight: bold;">
+                            🤖 Status: IDLE
+                        </div>
+                        <div style="margin-top: 10px; font-size: 13px; color: #7f8c8d;">
+                            <div>⬆️ Forward: Di chuyển thẳng</div>
+                            <div>⬅️ Left: Dịch ngang trái</div>
+                            <div>➡️ Right: Dịch ngang phải</div>
+                            <div>⬇️ Backward: Lùi lại</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="navbar.js"></script>
+    <script src="control.js"></script>
     <script>
-        // Device selection
-        let selectedDevice = null;
-        let devicePort = null;
-
         // Update device display banner
-        function updateDeviceBanner(device) {
+        function updateDeviceInfo() {
+            const deviceIp = localStorage.getItem('selected_esp_ip');
+            const devicePort = localStorage.getItem('selected_esp_port');
+            const deviceKey = localStorage.getItem('selected_device_key');
+            
             const banner = document.querySelector('.device-info-display');
-            if (device) {
-                banner.innerHTML = `✅ Đang kết nối: <strong>${device.name}</strong> (${device.ip}) - Port: ${devicePort}`;
+            if (deviceIp && devicePort) {
+                banner.textContent = `📡 Connected: ${deviceIp}:${devicePort} (${deviceKey || 'Unknown'})`;
                 banner.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             } else {
-                banner.innerHTML = '⚠️ Chưa chọn thiết bị';
+                banner.textContent = '⚠️ Chưa chọn thiết bị - Vui lòng vào Home và click Access';
                 banner.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
             }
         }
 
-        // Initialize device when page loads
-        fetch('/api/selected-device')
-            .then(response => response.json())
-            .then(data => {
-                if (data.device) {
-                    selectedDevice = data.device;
-                    devicePort = data.port;
-                    updateDeviceBanner(selectedDevice);
-                }
-            })
-            .catch(error => console.error('Error getting selected device:', error));
+        // Initialize on page load
+        updateDeviceInfo();
     </script>
     <script>
         // Compass visualization
@@ -303,6 +346,98 @@
         // ✅ Initial fetch and update every 500ms (realtime)
         updateMotionData();
         setInterval(updateMotionData, 500);
+
+        // 🎮 Omni Robot Control Functions
+        function sendRobotCommand(direction) {
+            const device = getSelectedDevice();
+            if (!device) {
+                alert('⚠️ Vui lòng chọn thiết bị trước!\n\nVào tab Home và click Access button.');
+                return;
+            }
+
+            // Update status display
+            const statusDiv = document.getElementById('robot-status');
+            statusDiv.textContent = `🤖 Status: ${direction.toUpperCase()}`;
+            statusDiv.style.background = direction === 'STOP' ? '#e74c3c' : '#27ae60';
+            statusDiv.style.color = 'white';
+
+            // Send command to server
+            fetch('/api/robot-control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    device_ip: device.ip,
+                    direction: direction
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Robot command sent:', data);
+                if (data.status === 'error') {
+                    statusDiv.textContent = `❌ Error: ${data.message}`;
+                    statusDiv.style.background = '#e74c3c';
+                }
+            })
+            .catch(error => {
+                console.error('Error sending robot command:', error);
+                statusDiv.textContent = '❌ Connection Error';
+                statusDiv.style.background = '#e74c3c';
+            });
+        }
+
+        // Button event listeners
+        document.getElementById('btn-forward').addEventListener('click', () => sendRobotCommand('FORWARD'));
+        document.getElementById('btn-left').addEventListener('click', () => sendRobotCommand('LEFT'));
+        document.getElementById('btn-right').addEventListener('click', () => sendRobotCommand('RIGHT'));
+        document.getElementById('btn-backward').addEventListener('click', () => sendRobotCommand('BACKWARD'));
+        document.getElementById('btn-stop').addEventListener('click', () => sendRobotCommand('STOP'));
+
+        // Button hover effects
+        document.querySelectorAll('.omni-btn').forEach(btn => {
+            btn.addEventListener('mousedown', function() {
+                this.style.transform = 'scale(0.9)';
+            });
+            btn.addEventListener('mouseup', function() {
+                this.style.transform = 'scale(1)';
+            });
+            btn.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+            });
+        });
+
+        // Keyboard control
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    sendRobotCommand('FORWARD');
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    sendRobotCommand('LEFT');
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    sendRobotCommand('RIGHT');
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    sendRobotCommand('BACKWARD');
+                    break;
+                case ' ':
+                case 'x':
+                case 'X':
+                    sendRobotCommand('STOP');
+                    e.preventDefault();
+                    break;
+            }
+        });
     </script>
 </body>
 </html>
