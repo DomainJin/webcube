@@ -839,6 +839,7 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                 data = json.loads(post_data.decode('utf-8'))
                 device_ip = data.get('device_ip')
                 direction = data.get('direction')
+                speed = data.get('speed', 150)  # Default speed: 150 (0-255)
                 
                 if device_ip and direction:
                     # Find device port from esp_devices
@@ -868,8 +869,9 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                         self.wfile.write(response.encode())
                         return
                     
-                    # Send MOVE command to ESP32
-                    command = f"MOVE:{direction}"
+                    # ✅ Send ROBOT command with speed parameter (new format)
+                    # Format: ROBOT:FORWARD,150 or ROBOT:ROTATE_LEFT,200
+                    command = f"ROBOT:{direction},{speed}"
                     success = send_udp_command(device_ip, listener_info['port'], command)
                     
                     print(f"🎮 Sent robot command to {device_key}: {command} - {'✅ OK' if success else '❌ FAILED'}")
@@ -882,7 +884,8 @@ class DataRequestHandler(SimpleHTTPRequestHandler):
                     response = json.dumps({
                         'status': 'success' if success else 'error',
                         'command': command,
-                        'device': device_key
+                        'device': device_key,
+                        'speed': speed
                     })
                     self.wfile.write(response.encode())
                 else:

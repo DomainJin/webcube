@@ -136,45 +136,70 @@
                 <h2>🎮 OMNI ROBOT CONTROL (3 Wheel Drive)</h2>
             </div>
             <div class="card-content">
-                <div style="display: flex; justify-content: center; align-items: center; gap: 40px; flex-wrap: wrap;">
-                    <!-- Direction Control Pad -->
-                    <div style="position: relative; width: 200px; height: 200px;">
-                        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%);">
-                            <button id="btn-forward" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                ▲
-                            </button>
+                <div style="display: flex; justify-content: center; align-items: flex-start; gap: 40px; flex-wrap: wrap;">
+                    <!-- Direction & Rotation Control Pad -->
+                    <div>
+                        <!-- Direction Control Pad -->
+                        <div style="position: relative; width: 200px; height: 200px; margin-bottom: 30px;">
+                            <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%);">
+                                <button id="btn-forward" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                    ▲
+                                </button>
+                            </div>
+                            <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
+                                <button id="btn-left" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                    ◄
+                                </button>
+                            </div>
+                            <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
+                                <button id="btn-right" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                    ►
+                                </button>
+                            </div>
+                            <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);">
+                                <button id="btn-backward" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                    ▼
+                                </button>
+                            </div>
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; background: #ecf0f1; border: 3px solid #16a085;"></div>
                         </div>
-                        <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
-                            <button id="btn-left" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                ◄
-                            </button>
+                        
+                        <!-- Rotation Control -->
+                        <div style="text-align: center;">
+                            <div style="font-size: 13px; font-weight: bold; color: #16a085; margin-bottom: 10px;">🔄 ROTATION</div>
+                            <div style="display: flex; gap: 10px; justify-content: center;">
+                                <button id="btn-rotate-left" class="omni-btn" style="width: 55px; height: 55px; border-radius: 50%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; color: white; font-size: 18px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                    ↶
+                                </button>
+                                <button id="btn-rotate-right" class="omni-btn" style="width: 55px; height: 55px; border-radius: 50%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; color: white; font-size: 18px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                                    ↷
+                                </button>
+                            </div>
                         </div>
-                        <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
-                            <button id="btn-right" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                ►
-                            </button>
-                        </div>
-                        <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);">
-                            <button id="btn-backward" class="omni-btn" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-size: 24px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                                ▼
-                            </button>
-                        </div>
-                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; background: #ecf0f1; border: 3px solid #16a085;"></div>
                     </div>
 
-                    <!-- Stop Button & Status -->
+                    <!-- Stop Button, Speed Control & Status -->
                     <div style="text-align: center;">
                         <button id="btn-stop" style="width: 120px; height: 120px; border-radius: 50%; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); border: none; color: white; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.3); margin-bottom: 20px;">
                             STOP
                         </button>
-                        <div id="robot-status" style="background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace; color: #2c3e50; font-weight: bold;">
+                        
+                        <!-- Speed Control Section -->
+                        <div style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); padding: 15px; border-radius: 8px; margin-bottom: 15px; color: white;">
+                            <div style="font-size: 13px; font-weight: bold; margin-bottom: 10px;">⚡ VẬN TỐC</div>
+                            <input id="speed-slider" type="range" min="0" max="255" value="150" style="width: 100%; cursor: pointer;">
+                            <div style="margin-top: 8px; font-size: 16px; font-weight: bold;" id="speed-value">150</div>
+                        </div>
+                        
+                        <div id="robot-status" style="background: #ecf0f1; padding: 15px; border-radius: 8px; font-family: monospace; color: #2c3e50; font-weight: bold; margin-bottom: 15px;">
                             🤖 Status: IDLE
                         </div>
-                        <div style="margin-top: 10px; font-size: 13px; color: #7f8c8d;">
-                            <div>⬆️ Forward: Di chuyển thẳng</div>
-                            <div>⬅️ Left: Dịch ngang trái</div>
-                            <div>➡️ Right: Dịch ngang phải</div>
-                            <div>⬇️ Backward: Lùi lại</div>
+                        <div style="font-size: 12px; color: #7f8c8d; background: #f8f9fa; padding: 10px; border-radius: 8px;">
+                            <div><strong>📍 Di chuyển:</strong></div>
+                            <div>⬆️ Forward | ⬅️ Left | ➡️ Right | ⬇️ Backward</div>
+                            <div style="margin-top: 8px;"><strong>🔄 Xoay:</strong></div>
+                            <div>↶ Left | ↷ Right</div>
+                            <div style="margin-top: 8px;"><strong>⚡ Vận tốc:</strong> 0-255</div>
                         </div>
                     </div>
                 </div>
@@ -348,6 +373,10 @@
         setInterval(updateMotionData, 500);
 
         // 🎮 Omni Robot Control Functions
+        function getSpeedValue() {
+            return parseInt(document.getElementById('speed-slider').value) || 150;
+        }
+
         function sendRobotCommand(direction) {
             const device = getSelectedDevice();
             if (!device) {
@@ -355,9 +384,12 @@
                 return;
             }
 
+            // Get current speed value
+            const speed = getSpeedValue();
+
             // Update status display
             const statusDiv = document.getElementById('robot-status');
-            statusDiv.textContent = `🤖 Status: ${direction.toUpperCase()}`;
+            statusDiv.textContent = `🤖 Status: ${direction.toUpperCase()} (Vận tốc: ${speed})`;
             statusDiv.style.background = direction === 'STOP' ? '#e74c3c' : '#27ae60';
             statusDiv.style.color = 'white';
 
@@ -369,7 +401,8 @@
                 },
                 body: JSON.stringify({
                     device_ip: device.ip,
-                    direction: direction
+                    direction: direction,
+                    speed: speed
                 })
             })
             .then(response => response.json())
@@ -392,7 +425,14 @@
         document.getElementById('btn-left').addEventListener('click', () => sendRobotCommand('LEFT'));
         document.getElementById('btn-right').addEventListener('click', () => sendRobotCommand('RIGHT'));
         document.getElementById('btn-backward').addEventListener('click', () => sendRobotCommand('BACKWARD'));
+        document.getElementById('btn-rotate-left').addEventListener('click', () => sendRobotCommand('ROTATE_LEFT'));
+        document.getElementById('btn-rotate-right').addEventListener('click', () => sendRobotCommand('ROTATE_RIGHT'));
         document.getElementById('btn-stop').addEventListener('click', () => sendRobotCommand('STOP'));
+
+        // Speed slider listener
+        document.getElementById('speed-slider').addEventListener('input', function() {
+            document.getElementById('speed-value').textContent = this.value;
+        });
 
         // Button hover effects
         document.querySelectorAll('.omni-btn').forEach(btn => {
@@ -429,6 +469,14 @@
                 case 's':
                 case 'S':
                     sendRobotCommand('BACKWARD');
+                    break;
+                case 'q':
+                case 'Q':
+                    sendRobotCommand('ROTATE_LEFT');
+                    break;
+                case 'e':
+                case 'E':
+                    sendRobotCommand('ROTATE_RIGHT');
                     break;
                 case ' ':
                 case 'x':
